@@ -468,45 +468,50 @@
       return LOG_LABEL[last.result];
     }
 
+    // 한 줄: 번호(결과 색) · 구종 · 구속 · 결과
     function logRow(e, x, w, ry, size, dim) {
       ctx.globalAlpha = dim ? 0.75 : 1;
       ctx.beginPath();
-      ctx.arc(x + 18, ry, size === 14 ? 9 : 8, 0, Math.PI * 2);
+      ctx.arc(x + 24, ry, size * 0.62, 0, Math.PI * 2);
       ctx.fillStyle = LOG_COLOR[e.result];
       ctx.fill();
-      text(String(e.n), x + 18, ry + 1, size - 2, '#111', 'center', 'bold');
-      text(e.type, x + 34, ry, size, '#fff', 'left', 'bold');
-      text(String(e.speed), x + 130, ry, size, '#cde', 'right');
-      text(LOG_LABEL[e.result], x + w - 10, ry, size, LOG_COLOR[e.result], 'right', 'bold');
+      text(String(e.n), x + 24, ry + 1, size - 4, '#111', 'center', 'bold');
+      text(e.type, x + 46, ry, size, '#fff', 'left', 'bold');
+      text(e.speed + 'km', x + 196, ry, size, '#cde', 'right');
+      text(LOG_LABEL[e.result], x + w - 16, ry, size, LOG_COLOR[e.result], 'right', 'bold');
       ctx.globalAlpha = 1;
     }
+
+    // 투구 기록 패널: 왼쪽 위 HUD와 같은 폭·글자 크기
+    const LOG_W = 280;
+    const LOG_X_RIGHT = L.width - 16 - LOG_W;
 
     // 위: 이번 타석(미니 존 + 목록), 아래: 직전 타석(다음 타석이 끝날 때까지 유지)
     function drawPitchLog(g, x) {
       const cur = g.history.filter((h) => h.atBat === g.atBat);
       const prev = g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
-      x = x == null ? 1066 : x;
+      x = x == null ? LOG_X_RIGHT : x;
       const onLeft = x < L.width / 2; // 왼쪽이면 HUD 아래부터
       const y = onLeft ? 232 : 150;
-      const w = 200;
+      const w = LOG_W;
       const bottom = onLeft ? 708 : 640; // 오른쪽은 아래 버튼 위까지
-      const cs = 34; // 미니 존 칸 크기
+      const cs = 40; // 미니 존 칸 크기
       const zx = x + (w - cs * 3) / 2;
-      const zy = y + 34;
+      const zy = y + 40;
       const rowY = zy + cs * 3 + 14;
-      const CUR_H = 24;
-      const PREV_H = 21;
+      const CUR_H = 30;
+      const PREV_H = 26;
       // 줄 수가 넘치면 직전 타석은 마지막 몇 줄만
       const curRows = Math.max(1, cur.length);
       let prevRows = prev.length;
-      const room = bottom - 8 - (rowY + curRows * CUR_H) - (prev.length ? 30 : 0);
+      const room = bottom - 8 - (rowY + curRows * CUR_H) - (prev.length ? 36 : 0);
       if (prevRows * PREV_H > room) prevRows = Math.max(0, Math.floor(room / PREV_H));
       const prevTop = rowY + curRows * CUR_H + 6;
-      const h = (prev.length ? prevTop + 26 + prevRows * PREV_H : rowY + curRows * CUR_H) - y + 8;
+      const h = (prev.length ? prevTop + 32 + prevRows * PREV_H : rowY + curRows * CUR_H) - y + 8;
       roundRect(x, y, w, h, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.85)';
       ctx.fill();
-      text(g.atBat + '번째 타석', x + 12, y + 18, 15, '#9ab', 'left', 'bold');
+      text(g.atBat + '번째 타석', x + 16, y + 22, 18, '#ffd34d', 'left', 'bold');
       // 미니 존: 공이 들어온 칸에 투구 번호
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 1;
@@ -528,32 +533,32 @@
         ctx.strokeRect(p.x - cs / 2 + 2, p.y - cs / 2 + 2, cs - 4, cs - 4);
       }
       const perCell = {};
-      const OFFS = [[0, 0], [-8, -8], [8, 8], [8, -8], [-8, 8]];
+      const OFFS = [[0, 0], [-10, -10], [10, 10], [10, -10], [-10, 10]];
       cur.forEach((e) => {
         const k = e.cell.row * 3 + e.cell.col;
         const o = OFFS[(perCell[k] = (perCell[k] || 0) + 1) - 1] || [0, 0];
         const p = center(e.cell);
         ctx.beginPath();
-        ctx.arc(p.x + o[0], p.y + o[1], 9, 0, Math.PI * 2);
+        ctx.arc(p.x + o[0], p.y + o[1], 11, 0, Math.PI * 2);
         ctx.fillStyle = LOG_COLOR[e.result];
         ctx.fill();
-        text(String(e.n), p.x + o[0], p.y + o[1] + 1, 12, '#111', 'center', 'bold');
+        text(String(e.n), p.x + o[0], p.y + o[1] + 1, 14, '#111', 'center', 'bold');
       });
-      if (!cur.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 12, 14, '#789', 'center');
-      cur.forEach((e, i) => logRow(e, x, w, rowY + i * CUR_H + 12, 14, false));
+      if (!cur.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 15, 17, '#789', 'center');
+      cur.forEach((e, i) => logRow(e, x, w, rowY + i * CUR_H + 15, 18, false));
       // 직전 타석
       if (prev.length) {
         ctx.strokeStyle = 'rgba(255,255,255,0.18)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(x + 10, prevTop);
-        ctx.lineTo(x + w - 10, prevTop);
+        ctx.moveTo(x + 12, prevTop);
+        ctx.lineTo(x + w - 12, prevTop);
         ctx.stroke();
-        text('직전 타석', x + 12, prevTop + 14, 14, '#9ab', 'left', 'bold');
+        text('직전 타석', x + 16, prevTop + 17, 17, '#9ab', 'left', 'bold');
         const out = atBatOutcomeLabel(prev);
-        text(out, x + w - 10, prevTop + 14, 14, out === '삼진' ? '#ff8a8a' : out === '범타' ? '#9aa7b8' : '#ffd34d', 'right', 'bold');
+        text(out, x + w - 16, prevTop + 17, 17, out === '삼진' ? '#ff8a8a' : out === '범타' ? '#9aa7b8' : '#ffd34d', 'right', 'bold');
         const shown = prev.slice(prev.length - prevRows);
-        shown.forEach((e, i) => logRow(e, x, w, prevTop + 26 + i * PREV_H + 10, 13, true));
+        shown.forEach((e, i) => logRow(e, x, w, prevTop + 32 + i * PREV_H + 12, 16, true));
       }
     }
 
@@ -646,7 +651,7 @@
       drawHud(g, view);
       // 터치 기기: 투구 기록은 패드 반대쪽(HUD 아래 또는 오른쪽), 버튼은 오른쪽 위 일시정지 하나
       const padLeft = view.record && view.record.settings.padSide === 'left';
-      const logX = touch && !padLeft ? 16 : 1066;
+      const logX = touch && !padLeft ? 16 : LOG_X_RIGHT;
       drawPitchLog(g, logX);
       drawBubble(g);
       drawCenterMessage(g);
