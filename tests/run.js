@@ -654,5 +654,62 @@ test('embed-sounds: 슬롯 이름 파일만 설정 구간으로 잘라 내장, b
   }
 });
 
+
+section('PWA');
+test('서비스 워커 캐시 목록: index.html이 쓰는 파일·매니페스트·아이콘을 모두 포함, 실제 파일 존재, 모두 상대경로', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const root = path.join(__dirname, '..');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
+  const assets = JSON.parse(sw.slice(sw.indexOf('[', sw.indexOf('const ASSETS')), sw.indexOf('];', sw.indexOf('const ASSETS')) + 1).replace(/'/g, '"').replace(/,\s*]/, ']'));
+  assert.ok(/const CACHE = 'bbgame-v\d+'/.test(sw), '캐시 이름에 버전');
+  const norm = (p) => './' + p.replace(/^\.\//, '');
+  // index.html이 불러오는 파일
+  const refs = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(refs.length > 10);
+  for (const r of refs) {
+    assert.ok(!r.startsWith('/') && !/^https?:/.test(r), '상대경로가 아님: ' + r);
+    assert.ok(assets.includes(norm(r)), '캐시 목록에 없음: ' + r);
+  }
+  // 매니페스트
+  assert.equal(manifest.start_url, './');
+  assert.equal(manifest.scope, './');
+  assert.equal(manifest.display, 'standalone');
+  const sizes = manifest.icons.map((i) => i.sizes + ':' + i.purpose);
+  assert.ok(sizes.includes('192x192:any') && sizes.includes('512x512:any') && sizes.includes('512x512:maskable'));
+  for (const ic of manifest.icons) assert.ok(assets.includes(norm(ic.src)), '아이콘이 캐시 목록에 없음: ' + ic.src);
+  // 목록의 파일이 모두 존재 (./ 는 index.html)
+  for (const a of assets) {
+    if (a === './') continue;
+    assert.ok(fs.existsSync(path.join(root, a)), '파일 없음: ' + a);
+  }
+  assert.ok(fs.existsSync(path.join(root, '.nojekyll')), 'GitHub Pages용 .nojekyll');
+});
+test('아이콘 PNG: 서명·크기·CRC가 올바름', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const zlib = require('zlib');
+  const { crc32, ICONS } = require('../tools/make-icons.js');
+  for (const ic of ICONS) {
+    const b = fs.readFileSync(path.join(__dirname, '..', 'icons', ic.file));
+    assert.deepEqual([...b.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    assert.equal(b.readUInt32BE(16), ic.size);
+    assert.equal(b.readUInt32BE(20), ic.size);
+    // 모든 청크의 CRC 확인 + 압축 해제한 크기
+    let pos = 8;
+    let idat = [];
+    while (pos < b.length) {
+      const len = b.readUInt32BE(pos);
+      const type = b.toString('latin1', pos + 4, pos + 8);
+      assert.equal(b.readUInt32BE(pos + 8 + len), crc32(b.subarray(pos + 4, pos + 8 + len)), ic.file + ' ' + type + ' CRC');
+      if (type === 'IDAT') idat.push(b.subarray(pos + 8, pos + 8 + len));
+      pos += 12 + len;
+    }
+    assert.equal(zlib.inflateSync(Buffer.concat(idat)).length, (ic.size * 4 + 1) * ic.size);
+  }
+});
+
 console.log(`\n${passed} 통과, ${failed} 실패`);
 process.exitCode = failed ? 1 : 0;

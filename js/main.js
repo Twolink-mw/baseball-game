@@ -511,6 +511,20 @@
   });
   checkOrientation();
 
+  // ---- PWA: 서비스 워커는 http/https에서만 (file://, Electron 제외) ----
+  if ('serviceWorker' in global.navigator && /^https?:$/.test(global.location.protocol)) {
+    try {
+      const hadController = !!global.navigator.serviceWorker.controller;
+      global.navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // 이미 설치돼 있던 앱이 새 버전으로 바뀐 경우만 안내
+        if (hadController) showToast('새 버전이 적용되었습니다', 4);
+      });
+      global.navigator.serviceWorker.register('./sw.js').catch(() => {});
+    } catch (e) {
+      /* 등록 실패해도 게임은 동작 */
+    }
+  }
+
   function frame(ts) {
     const dt = app.lastFrameTs === null ? 0 : (ts - app.lastFrameTs) / 1000;
     app.lastFrameTs = ts;

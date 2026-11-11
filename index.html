@@ -4,6 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>타자 시점 야구</title>
+    <meta name="theme-color" content="#0f1c30" />
+    <!-- 매니페스트는 http/https에서만 연결 (file://에서는 Chrome이 CORS 오류를 남김) -->
+    <script>
+      if (/^https?:$/.test(location.protocol)) {
+        var m = document.createElement('link');
+        m.rel = 'manifest';
+        m.href = './manifest.webmanifest';
+        document.head.appendChild(m);
+      }
+    </script>
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
+    <!-- iOS 홈 화면 추가 -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="타자 야구" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="./css/style.css" />
   </head>
   <body>
