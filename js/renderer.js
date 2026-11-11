@@ -185,16 +185,50 @@
       return { x, y, w, h };
     }
 
-    // 음소거 토글 (M 키로도 전환)
-    function muteButton(view, x, y, w, h) {
-      const muted = view.record && view.record.settings.muted;
-      const r = button('mute', x, y, w, h, muted ? '소리 끔' : '소리 켬', { size: 18 });
-      if (muted) {
-        ctx.strokeStyle = '#ff8a8a';
-        ctx.lineWidth = 2;
-        roundRect(r.x, r.y, r.w, r.h, 10);
-        ctx.stroke();
+    // 음소거 토글 (M 키로도 전환): 버튼 대신 스피커 아이콘으로 '지금 상태'를 보여 줌
+    // 켜짐 = 스피커 + 음파, 꺼짐 = 흐린 스피커 + 빨간 사선. cx,cy: 가운데, size: 지름
+    function muteButton(view, cx, cy, size) {
+      const muted = !!(view.record && view.record.settings.muted);
+      const s = size / 48;
+      ctx.beginPath();
+      ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fill();
+      // 스피커 몸통 + 나팔
+      ctx.beginPath();
+      ctx.moveTo(cx - 15 * s, cy - 6 * s);
+      ctx.lineTo(cx - 7 * s, cy - 6 * s);
+      ctx.lineTo(cx + 3 * s, cy - 15 * s);
+      ctx.lineTo(cx + 3 * s, cy + 15 * s);
+      ctx.lineTo(cx - 7 * s, cy + 6 * s);
+      ctx.lineTo(cx - 15 * s, cy + 6 * s);
+      ctx.closePath();
+      ctx.fillStyle = muted ? '#9aa3ad' : '#fff';
+      ctx.fill();
+      ctx.lineCap = 'round';
+      if (!muted) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3 * s;
+        for (const rad of [8, 15]) {
+          ctx.beginPath();
+          ctx.arc(cx + 4 * s, cy, rad * s, -0.75, 0.75);
+          ctx.stroke();
+        }
+      } else {
+        // 빨간 사선 (어두운 테두리로 배경과 구분)
+        for (const [col, lw] of [['rgba(0,0,0,0.7)', 7], ['#ff3b3b', 4]]) {
+          ctx.beginPath();
+          ctx.moveTo(cx - 17 * s, cy - 17 * s);
+          ctx.lineTo(cx + 17 * s, cy + 17 * s);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = lw * s;
+          ctx.stroke();
+        }
       }
+      ctx.lineCap = 'butt';
+      // 누르는 영역은 터치 최소 크기 보장
+      const hs = Math.max(size, minTap);
+      hits.push({ id: 'mute', x: cx - hs / 2, y: cy - hs / 2, w: hs, h: hs });
     }
 
     // 구장 배경(하늘+캐시) + 덮개
@@ -665,7 +699,7 @@
       if (touch) {
         button('pause', L.width - 150, 8, 140, 56, '일시정지', { size: 20 });
       } else {
-        muteButton(view, L.width - 410, L.height - 70, 120, 50);
+        muteButton(view, L.width - 326, L.height - 45, 50);
         button('pause', L.width - 280, L.height - 70, 120, 50, '일시정지', { size: 20 });
         button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
       }
@@ -678,7 +712,7 @@
         button('resume', 640 - 210, 290, 200, 60, '계속하기', { primary: true });
         button('menu', 640 + 10, 290, 200, 60, '메뉴로');
         // 소리, (터치 기기) 패드 위치
-        muteButton(view, 640 - 210, 400, 200, 60);
+        muteButton(view, touch ? 640 - 110 : 640, 430, 64);
         if (touch) button('padSide', 640 + 10, 400, 200, 60, '패드: ' + (padLeft ? '왼쪽' : '오른쪽'), { size: 20 });
       }
     }
@@ -753,8 +787,8 @@
         : '조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기';
       text(hint, 640, 600, 16, '#bcd', 'center');
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
-      button('backup', 206, L.height - 70, 170, 50, '기록 백업', { size: 18 });
-      muteButton(view, L.width - 150, 16, 130, 44);
+      if (C.SHOW_BACKUP) button('backup', 206, L.height - 70, 170, 50, '기록 백업', { size: 18 });
+      muteButton(view, L.width - 46, 42, 52);
       if (view.canFullscreen) button('fullscreen', 20, 16, 150, 44, view.isFullscreen ? '전체화면 끄기' : '전체화면', { size: 18 });
       if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 626, 15, '#9ab', 'center');
 
