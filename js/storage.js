@@ -191,7 +191,7 @@
     const newRecord = prev === null ? avg > 0 : avg > prev;
     let unlockedLevel = null;
     const next = levelIndex + 1;
-    if (avg >= CONFIG.UNLOCK_AVG && next < NLEVELS && !p.unlocked[next]) {
+    if (next < NLEVELS && avg >= CONFIG.UNLOCK_AVG[levelIndex] && next < NLEVELS && !p.unlocked[next]) {
       p.unlocked[next] = true;
       unlockedLevel = next;
     }

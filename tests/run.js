@@ -340,11 +340,12 @@ test('같은 이름 재플레이 시 통산 타율 누적 (3/9 + 6/9 → 9/18)',
   const p = r.record.players['홍길동'];
   assert.deepEqual([p.hits, p.atBats, p.games], [9, 18, 2]);
 });
-test('.300 미만이면 다음 레벨 잠김, 이상이면 해제, 이후 낮은 타율이어도 유지', () => {
-  let r = play(withPlayers('a'), 'a', 0, 2);
+test('해제 기준: Lv.1은 .400(4안타), Lv.2는 .300(3안타). 이후 낮은 타율이어도 유지', () => {
+  assert.deepEqual(CONFIG.UNLOCK_AVG, [0.4, 0.3]);
+  let r = play(withPlayers('a'), 'a', 0, 3); // .333: Lv.1 기준 미달
   assert.equal(r.record.players.a.unlocked[1], false);
   assert.equal(r.unlockedLevel, null);
-  r = play(r.record, 'a', 0, 3);
+  r = play(r.record, 'a', 0, 4); // .444
   assert.equal(r.record.players.a.unlocked[1], true);
   assert.equal(r.unlockedLevel, 1);
   r = play(r.record, 'a', 0, 0);
@@ -446,7 +447,7 @@ test('normalizeRecord: 깨진 데이터에서 살릴 수 있는 필드만 살림
 });
 test('mergeRecords: 타자별 병합 + 없는 타자 추가 + 현재 타자/설정 유지', () => {
   let a = withPlayers('공통', 'A만');
-  a = play(a, '공통', 0, 3).record; // 3/9, Lv.2 해제
+  a = play(a, '공통', 0, 4).record; // 4/9, Lv.2 해제
   a.settings.muted = true;
   a.players['공통'].daily = { date: '2026-11-10', avg: 0.2 };
   let b = withPlayers('공통', 'B만');
@@ -458,7 +459,7 @@ test('mergeRecords: 타자별 병합 + 없는 타자 추가 + 현재 타자/설�
   const p = m.players['공통'];
   assert.deepEqual(Object.keys(m.players).sort(), ['a만', 'b만', '공통'].sort());
   assert.deepEqual(p.unlocked, [true, true, true]);
-  assert.deepEqual(p.best, [3 / 9, 1 / 9, null]);
+  assert.deepEqual(p.best, [4 / 9, 1 / 9, null]);
   assert.deepEqual([p.hits, p.atBats], [3, 18], '타수가 많은 쪽 채택');
   assert.equal(p.games, 2);
   assert.deepEqual(p.daily, { date: '2026-11-11', avg: 0.1 });

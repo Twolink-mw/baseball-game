@@ -556,8 +556,8 @@
           text('플레이 ▶', x + cw / 2, y + 180, 22, '#8fd', 'center', 'bold');
         } else {
           text('🔒 잠김', x + cw / 2, y + 128, 20, '#aaa', 'center');
-          const need = Math.ceil(C.UNLOCK_AVG * C.AT_BATS_PER_GAME - 1e-9);
-          text(C.LEVELS[i - 1].name + ' 타율 ' + BB.formatAvg(C.UNLOCK_AVG) + ' 이상', x + cw / 2, y + 168, 18, '#aaa', 'center');
+          const need = Math.ceil(C.UNLOCK_AVG[i - 1] * C.AT_BATS_PER_GAME - 1e-9);
+          text(C.LEVELS[i - 1].name + ' 타율 ' + BB.formatAvg(C.UNLOCK_AVG[i - 1]) + ' 이상', x + cw / 2, y + 168, 18, '#aaa', 'center');
           text('(' + C.AT_BATS_PER_GAME + '타석 ' + need + '안타)', x + cw / 2, y + 192, 16, '#999', 'center');
         }
       });
