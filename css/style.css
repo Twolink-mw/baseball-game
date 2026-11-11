@@ -138,6 +138,56 @@ body {
   font-size: 20px;
 }
 
+.dialog-box.wide {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.dialog-box h3 {
+  margin: 14px 0 6px;
+  font-size: 16px;
+  color: #ffd34d;
+}
+
+.dialog-note {
+  margin: 0 0 4px;
+  color: #9ab;
+  font-size: 14px;
+}
+
+.dialog-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  font: 13px/1.4 ui-monospace, Consolas, monospace;
+  border-radius: 8px;
+  border: 2px solid #4a6a9a;
+  background: #0b1526;
+  color: #fff;
+  resize: vertical;
+}
+
+.dialog-box textarea:focus {
+  outline: none;
+  border-color: #ffd34d;
+}
+
+.dialog-msg {
+  min-height: 20px;
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: #7cf29a;
+}
+
+.dialog-msg.error {
+  color: #ff8a8a;
+}
+
+.dialog-actions.start {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
 #name-input {
   width: 100%;
   box-sizing: border-box;

@@ -136,7 +136,131 @@
     }
   });
 
-  const dialogOpen = () => !dialog.el.hidden;
+  // ---- 기록 백업 대화상자 ----
+  const backup = {
+    el: document.getElementById('backup-dialog'),
+    exportText: document.getElementById('export-text'),
+    importText: document.getElementById('import-text'),
+    file: document.getElementById('import-file'),
+    msg: document.getElementById('backup-msg'),
+  };
+
+  function backupMessage(str, isError) {
+    backup.msg.textContent = str;
+    backup.msg.classList.toggle('error', !!isError);
+  }
+
+  function openBackupDialog() {
+    backup.exportText.value = BB.exportRecord(app.record);
+    backup.importText.value = '';
+    backupMessage('');
+    backup.el.hidden = false;
+  }
+
+  function closeBackupDialog() {
+    backup.el.hidden = true;
+    document.activeElement && document.activeElement.blur && document.activeElement.blur();
+  }
+
+  // 파일 내려받기 (공유를 지원하지 않는 환경, 기록 저장)
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  function importText(text) {
+    const r = BB.importRecordText(app.record, text);
+    if (r.error === 'parse') return backupMessage('기록 형식(JSON)이 아닙니다. 기존 기록은 그대로입니다.', true);
+    if (r.error) return backupMessage('이 게임의 기록이 아니거나 손상된 기록입니다. 기존 기록은 그대로입니다.', true);
+    setRecord(r.record);
+    backup.exportText.value = BB.exportRecord(app.record);
+    const parts = [];
+    if (r.added.length) parts.push('새 타자 ' + r.added.length + '명(' + r.added.join(', ') + ')');
+    if (r.updated.length) parts.push('갱신 ' + r.updated.length + '명(' + r.updated.join(', ') + ')');
+    if (r.skipped.length) parts.push('타자 수 제한으로 ' + r.skipped.length + '명 제외');
+    backupMessage(parts.length ? '가져왔습니다: ' + parts.join(' · ') : '이미 같은 기록입니다. 바뀐 것이 없습니다.');
+  }
+
+  document.getElementById('export-copy').addEventListener('click', () => {
+    const text = backup.exportText.value;
+    const fallback = () => {
+      backup.exportText.select();
+      try {
+        document.execCommand('copy');
+        backupMessage('복사했습니다. 다른 기기의 가져오기 칸에 붙여넣으세요.');
+      } catch (e) {
+        backupMessage('복사하지 못했습니다. 글자를 길게 눌러 직접 복사하세요.', true);
+      }
+    };
+    if (global.navigator.clipboard && global.isSecureContext) {
+      global.navigator.clipboard.writeText(text).then(() => backupMessage('복사했습니다. 다른 기기의 가져오기 칸에 붙여넣으세요.'), fallback);
+    } else fallback();
+  });
+  document.getElementById('export-file').addEventListener('click', () => {
+    downloadBlob(new Blob([backup.exportText.value], { type: 'application/json' }), 'bbgame-기록-' + today() + '.json');
+    backupMessage('파일로 저장했습니다.');
+  });
+  document.getElementById('import-paste').addEventListener('click', () => importText(backup.importText.value));
+  document.getElementById('import-file-btn').addEventListener('click', () => backup.file.click());
+  backup.file.addEventListener('change', () => {
+    const f = backup.file.files && backup.file.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => importText(reader.result);
+    reader.onerror = () => backupMessage('파일을 읽지 못했습니다.', true);
+    reader.readAsText(f);
+    backup.file.value = '';
+  });
+  document.getElementById('backup-close').addEventListener('click', closeBackupDialog);
+  backup.el.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeBackupDialog();
+    }
+  });
+
+  const dialogOpen = () => !dialog.el.hidden || !backup.el.hidden;
+
+  function showToast(text, sec) {
+    app.toast = { text, until: performance.now() + (sec || 2.5) * 1000 };
+  }
+
+  // 결과 카드 PNG 공유 (지원하면 공유 시트, 아니면 내려받기)
+  function shareResult() {
+    const r = app.result;
+    if (!r) return;
+    const card = renderer.makeShareCard(r, performance.now() / 1000);
+    const s = r.summary;
+    const title = s.mode === 'challenge' ? r.date.slice(5).replace('-', '/') + ' 챌린지' : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title;
+    const msg = '타자 시점 야구 · ' + r.playerName + ' · ' + title + ' ' + BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
+    const filename = 'bbgame-' + r.date + '-' + r.playerName + '.png';
+    card.toBlob((blob) => {
+      if (!blob) return showToast('이미지를 만들지 못했습니다');
+      let file = null;
+      try {
+        file = new File([blob], filename, { type: 'image/png' });
+      } catch (e) {
+        file = null;
+      }
+      const nav = global.navigator;
+      if (file && nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+        nav.share({ files: [file], title: '타자 시점 야구', text: msg }).catch((e) => {
+          if (e && e.name !== 'AbortError') {
+            downloadBlob(blob, filename);
+            showToast('결과 이미지를 저장했습니다');
+          }
+        });
+      } else {
+        downloadBlob(blob, filename);
+        showToast('결과 이미지를 저장했습니다');
+      }
+    }, 'image/png');
+  }
 
   // ---- 게임 ----
   function startGame(levelIndex, mode) {
@@ -252,6 +376,10 @@
       }
       case 'fullscreen':
         return toggleFullscreen();
+      case 'backup':
+        return openBackupDialog();
+      case 'share':
+        return shareResult();
       case 'pause':
         return setPaused(true);
       case 'resume':
@@ -413,7 +541,7 @@
       canFullscreen: canFullscreen(),
       isFullscreen: !!fsElement(),
       iosHint: isIOS,
-      toast: app.toast && app.screen === 'title' ? app.toast.text : null,
+      toast: app.toast ? app.toast.text : null,
     });
     global.requestAnimationFrame(frame);
   }

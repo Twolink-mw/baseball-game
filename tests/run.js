@@ -546,6 +546,40 @@ test('우타/좌타: 저장값 정규화·검증·병합', () => {
 });
 
 
+test('기록 백업: 내보내기 → 다른 기기 가져오기 왕복, 잘못된 내용은 거부하고 기존 기록 유지', () => {
+  // 기기 A: 두 타자
+  let a = withPlayers('홍길동', '이순신');
+  a = play(a, '홍길동', 0, 4).record; // 4/9, Lv.2 해제
+  const text = S.exportRecord(a);
+  assert.equal(JSON.parse(text).v, 2);
+  // 기기 B: 홍길동은 적게 쳤고, 다른 타자 한 명
+  let b = withPlayers('홍길동', '강감찬');
+  b = play(b, '홍길동', 0, 1).record;
+  b = play(b, '홍길동', 0, 2).record; // 3/18
+  b.settings.padSide = 'left';
+  const r = S.importRecordText(b, text);
+  assert.ok(!r.error);
+  assert.deepEqual(r.added, ['이순신']);
+  assert.deepEqual(r.updated, ['홍길동']);
+  const p = r.record.players['홍길동'];
+  assert.deepEqual([p.hits, p.atBats], [3, 18], '통산은 타수가 많은 쪽(B)');
+  assert.equal(p.best[0], 4 / 9, '최고 타율은 큰 값(A)');
+  assert.equal(p.unlocked[1], true, '해제는 하나라도 해제면 해제');
+  assert.equal(r.record.current, b.current, '현재 타자는 이 기기 값');
+  assert.equal(r.record.settings.padSide, 'left', '설정은 이 기기 값');
+  // 같은 내용을 다시 가져오면 바뀌는 것 없음
+  const again = S.importRecordText(r.record, text);
+  assert.deepEqual([again.added, again.updated], [[], []]);
+  // 잘못된 내용
+  assert.equal(S.importRecordText(b, '{오류').error, 'parse');
+  assert.equal(S.importRecordText(b, '{"v":2,"players":[]}').error, 'invalid');
+  assert.equal(S.importRecordText(b, '').error, 'parse');
+  // 이전 버전(v1) 파일도 받아들임
+  const v1 = JSON.stringify({ v: 1, name: '옛타자', unlocked: [true, true, false], best: [0.5, null, null], games: 3 });
+  const r1 = S.importRecordText(b, v1);
+  assert.deepEqual(r1.added, ['옛타자']);
+});
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {

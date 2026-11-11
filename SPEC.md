@@ -455,6 +455,9 @@ WebAudio API. 타격·미트·바람 소리는 **코드 합성**, 관중 소리�
 - 설정에 `기록 내보내기`(JSON 텍스트 복사 또는 파일 저장), `기록 가져오기`(붙여넣기 또는 파일 선택). 기기 간 기록 이동용
   - 내보내기 JSON에는 `v` 필드 포함
   - 가져오기는 `validateRecord`로 형식 검증 후 `mergeRecords`로 **타자별 병합**: 레벨별 최고 타율은 큰 값, 잠금 해제는 하나라도 해제면 해제, 통산 안타/타수는 **타수가 많은 쪽**(합치면 중복 집계되므로), `games`는 큰 값, `daily`는 날짜가 늦은 쪽. 한쪽에만 있는 타자는 추가(`MAX_PLAYERS` 이내). 현재 타자/설정은 현재 기기 값 유지. v1 파일도 받아들임. 검증 실패 시 기존 기록 유지
+- **구현 메모 (M5-2)**
+  - 결과 화면 `결과 공유`: 1280×720 PNG 카드(구장 배경, 타자 이름·우타/좌타, 날짜, 레벨 또는 `MM/DD 챌린지`, 이번 타율, 안타 내역, 통산 타율, NEW RECORD/해제). `navigator.canShare({files})`면 공유 시트(휴대폰, Windows Chrome 등), 아니면 PNG 내려받기 + 안내.
+  - 타이틀 `기록 백업` 대화상자(HTML): 내보내기(복사·`.json` 파일 저장), 가져오기(붙여넣기·파일 선택). 처리 로직은 `storage.js`의 순수 함수 `exportRecord`, `importRecordText`(→ 추가/갱신/제외된 타자 이름, 실패 시 `parse`/`invalid` 오류와 기존 기록 유지). 대화상자가 열려 있으면 게임 키 무시.
 
 **M5-3. PWA**
 - `manifest.webmanifest`: `name`, `short_name`, `start_url: "./"`, `scope: "./"`, `display: "standalone"`, `orientation: "landscape"`, `background_color`, `theme_color`, 아이콘 192/512 (any + maskable)

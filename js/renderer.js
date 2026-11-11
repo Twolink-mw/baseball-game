@@ -32,7 +32,7 @@
   const screenProgress = (t) => (1 / Math.max(PA + 1 - t, 0.05) - 1 / (PA + 1)) / (1 / PA - 1 / (PA + 1));
 
   function createRenderer(canvas) {
-    const ctx = canvas.getContext('2d');
+    let ctx = canvas.getContext('2d'); // 공유 카드를 그릴 때 잠시 다른 캔버스로 바꿈
     let dpr = 1;
     let hits = [];
     let bg = null; // 고정 배경 캐시(실제 픽셀 크기)
@@ -741,15 +741,11 @@
         : '조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기';
       text(hint, 640, 600, 16, '#bcd', 'center');
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
+      button('backup', 206, L.height - 70, 170, 50, '기록 백업', { size: 18 });
       muteButton(view, L.width - 150, 16, 130, 44);
       if (view.canFullscreen) button('fullscreen', 20, 16, 150, 44, view.isFullscreen ? '전체화면 끄기' : '전체화면', { size: 18 });
       if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 626, 15, '#9ab', 'center');
-      if (view.toast) {
-        roundRect(640 - 220, 560, 440, 40, 20);
-        ctx.fillStyle = 'rgba(47,125,225,0.92)';
-        ctx.fill();
-        text(view.toast, 640, 580, 18, '#fff', 'center', 'bold');
-      }
+
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
     }
 
@@ -848,9 +844,20 @@
       const canNext = s.mode === 'normal' && s.levelIndex + 1 < C.LEVELS.length && r.player.unlocked[s.levelIndex + 1];
       const buttons = [['retry', '다시하기', true]];
       if (canNext) buttons.push(['next', '다음 레벨', false]);
+      buttons.push(['share', '결과 공유', false]);
       buttons.push(['menu', '메뉴로', false]);
       const total = buttons.length * bw + (buttons.length - 1) * 24;
       buttons.forEach(([id, label, primary], i) => button(id, (L.width - total) / 2 + i * (bw + 24), by, bw, 64, label, { primary }));
+    }
+
+    // 짧은 안내(토스트): 모든 화면 맨 위
+    function drawToast(str) {
+      ctx.font = 'bold 18px ' + FONT;
+      const w = Math.min(1100, ctx.measureText(str).width + 60);
+      roundRect(640 - w / 2, 520, w, 44, 22);
+      ctx.fillStyle = 'rgba(47,125,225,0.95)';
+      ctx.fill();
+      text(str, 640, 542, 18, '#fff', 'center', 'bold');
     }
 
     function draw(view) {
@@ -861,11 +868,49 @@
       else if (view.screen === 'game') drawGame(view);
       else if (view.screen === 'result') drawResult(view);
       else if (view.screen === 'players') drawPlayers(view);
+      if (view.toast) drawToast(view.toast);
       return hits;
     }
 
+    // 결과 공유 카드 (1280×720 PNG용 캔버스). 화면 그리기 도우미를 그대로 쓰려고 ctx를 잠시 바꾼다
+    function makeShareCard(r, now) {
+      const cv = document.createElement('canvas');
+      cv.width = L.width;
+      cv.height = L.height;
+      const savedCtx = ctx;
+      const savedHits = hits;
+      ctx = cv.getContext('2d');
+      try {
+        const s = r.summary;
+        drawBackdrop(now, 'rgba(8,14,26,0.74)');
+        text('타자 시점 야구', 48, 50, 26, '#cfe', 'left', 'bold');
+        text(r.date.replace(/-/g, '.'), L.width - 48, 50, 24, '#cfe', 'right');
+        const bats = r.player && r.player.bats === 'L' ? '좌타' : '우타';
+        const mode =
+          s.mode === 'challenge'
+            ? r.date.slice(5).replace('-', '/') + ' 챌린지' + (r.official ? '' : ' (연습)')
+            : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title + ' · ' + C.LEVELS[s.levelIndex].baseSpeed + 'km';
+        outlined(r.playerName, 640, 150, 56, '#ffd34d');
+        text(bats + ' · ' + mode, 640, 210, 28, '#fff', 'center', 'bold');
+        text('이번 타율', 640, 280, 26, '#aab', 'center');
+        outlined(BB.formatAvg(s.avg), 640, 370, 130, '#ffd34d');
+        text(s.hits + '안타 / ' + C.AT_BATS_PER_GAME + '타수 · 홈런 ' + s.homers + ' · 2루타 ' + s.doubles + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
+        if (s.mode === 'normal' && r.careerAfter !== null) {
+          text('통산 타율 ' + BB.formatAvg(r.careerAfter) + ' (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, 520, 26, '#cde', 'center', 'bold');
+        }
+        const badges = [];
+        if (r.newRecord) badges.push(['NEW RECORD', '#ff6b6b']);
+        if (r.unlockedLevel !== null) badges.push([C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a']);
+        badges.forEach(([str, col], i) => outlined(str, 640 + (i - (badges.length - 1) / 2) * 360, 600, 40, col));
+      } finally {
+        ctx = savedCtx;
+        hits = savedHits;
+      }
+      return cv;
+    }
+
     resize();
-    return { resize, toLogical, cellAt, draw, setTouch, cssScale: () => cssScale };
+    return { resize, toLogical, cellAt, draw, setTouch, makeShareCard, cssScale: () => cssScale };
   }
 
   Object.assign(BB, { createRenderer });

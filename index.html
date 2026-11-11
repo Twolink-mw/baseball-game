@@ -9,6 +9,31 @@
   <body>
     <canvas id="game" width="1280" height="720"></canvas>
 
+    <!-- 기록 백업 (내보내기/가져오기, 서버 없음) -->
+    <div id="backup-dialog" class="dialog" hidden>
+      <div class="dialog-box wide" role="dialog" aria-labelledby="backup-title">
+        <h2 id="backup-title">기록 백업</h2>
+        <p class="dialog-note">다른 기기로 기록을 옮길 때 씁니다. 기록은 이 기기에만 저장되고 서버로 보내지 않습니다.</p>
+        <h3>내보내기</h3>
+        <textarea id="export-text" readonly rows="3" spellcheck="false"></textarea>
+        <div class="dialog-actions start">
+          <button type="button" id="export-copy">복사</button>
+          <button type="button" id="export-file">파일로 저장</button>
+        </div>
+        <h3>가져오기</h3>
+        <textarea id="import-text" rows="3" spellcheck="false" placeholder="다른 기기에서 내보낸 기록을 붙여넣으세요"></textarea>
+        <div class="dialog-actions start">
+          <button type="button" id="import-paste" class="primary">붙여넣은 기록 가져오기</button>
+          <button type="button" id="import-file-btn">파일에서 가져오기</button>
+          <input type="file" id="import-file" accept=".json,application/json,text/plain" hidden />
+        </div>
+        <p id="backup-msg" class="dialog-msg" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button type="button" id="backup-close">닫기</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 터치 패드 (터치 기기의 게임 화면에서만). 존을 직접 누르면 손가락이 공을 가리기 때문 -->
     <div id="touch-pad" hidden aria-label="타격 패드">
       <button type="button" data-row="0" data-col="0"></button><button type="button" data-row="0" data-col="1"></button><button type="button" data-row="0" data-col="2"></button>

@@ -226,6 +226,35 @@
     return r;
   }
 
+  // ---- 기록 백업: 내보내기/가져오기 (기기 간 이동, 서버 없음) ----
+  // 내보내기 JSON 텍스트 (v 필드 포함)
+  function exportRecord(record) {
+    return JSON.stringify(normalizeRecord(record));
+  }
+
+  // 가져오기: 텍스트 → 검증 → 타자별 병합. 실패하면 { error }, 기존 기록은 건드리지 않음
+  // 성공: { record, added: [이름], updated: [이름], skipped: [이름](타자 수 초과) }
+  function importRecordText(base, text) {
+    let obj;
+    try {
+      obj = JSON.parse(String(text || '').trim());
+    } catch (e) {
+      return { error: 'parse' };
+    }
+    const valid = validateRecord(obj);
+    if (!valid) return { error: 'invalid' };
+    const before = normalizeRecord(base);
+    const record = mergeRecords(before, valid);
+    const added = [];
+    const updated = [];
+    const skipped = [];
+    for (const [key, p] of Object.entries(valid.players)) {
+      if (!before.players[key]) (record.players[key] ? added : skipped).push(p.name);
+      else if (JSON.stringify(before.players[key]) !== JSON.stringify(record.players[key])) updated.push(p.name);
+    }
+    return { record, added, updated, skipped };
+  }
+
   // ---- 브라우저 저장소 (실패해도 게임은 계속) ----
   function load() {
     try {
@@ -258,6 +287,7 @@
   const api = {
     normalizeName, playerKey, defaultPlayer, defaultRecord, normalizeRecord, validateRecord,
     ensurePlayer, careerAvg, rankPlayers, deletePlayer, applyGameResult, mergeRecords,
+    exportRecord, importRecordText,
     storage: { load, save, clear },
   };
   if (isNode) module.exports = api;
