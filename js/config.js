@@ -105,6 +105,16 @@
       // 나무 배트 공명 모드 [주파수 Hz, 울림 시간 초, 상대 크기]. 높은 모드는 정타일 때만 강하게 울림
       batModes: [[540, 0.09, 1], [1220, 0.07, 0.7], [1980, 0.05, 0.55], [2760, 0.04, 0.4], [3650, 0.03, 0.3]],
       batModeGain: 0.75, // 공명 모드 음량
+      // 관중 녹음(CC0, sounds/ → js/sounds-data.js) 재생 설정. 녹음이 없으면 합성음 사용
+      // offset: 시작 위치(초), dur: 길이(초, null이면 끝까지), gain: 음량, fadeIn/fadeOut(초), wet: 잔향 비율
+      samples: {
+        homerun: { offset: 0, dur: null, gain: 0.9, fadeIn: 0.05, fadeOut: 1.0, wet: 0.2 },
+        cheer: { offset: 0, dur: 2.5, gain: 0.7, fadeIn: 0.05, fadeOut: 0.6, wet: 0.2 },
+        applause: { offset: 0, dur: 3, gain: 0.6, fadeIn: 0.1, fadeOut: 0.8, wet: 0.2 },
+        ooh: { offset: 0, dur: 1.2, gain: 0.6, fadeIn: 0.05, fadeOut: 0.4, wet: 0.2 },
+        groan: { offset: 0, dur: 1.4, gain: 0.6, fadeIn: 0.05, fadeOut: 0.4, wet: 0.2 },
+        ambience: { offset: 0, dur: null, gain: 0.5, wet: 0.1 }, // 반복 재생 (offset ~ offset+dur 구간)
+      },
     },
 
     // 연출(초)

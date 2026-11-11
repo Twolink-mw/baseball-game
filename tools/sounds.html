@@ -66,6 +66,7 @@
   <body>
     <h1>효과음 확인 (개발용)</h1>
     <p>게임 효과음을 하나씩 들어보는 페이지입니다. 값은 js/config.js의 AUDIO와 js/audio.js에서 조정합니다.</p>
+    <p id="status">관중 소리: 버튼을 한 번 누르면 녹음/합성 여부가 표시됩니다.</p>
 
     <section>
       <h2>타격음 (나무 배트)</h2>
@@ -96,7 +97,7 @@
         <button id="amb">배경 웅성거림 켜기</button>
         <button data-play="cheer" data-opts='{"intensity":0.55,"dur":1.4}'>안타 환호</button>
         <button data-play="cheer" data-opts='{"intensity":0.75,"dur":2}'>2루타 환호</button>
-        <button data-play="cheer" data-opts='{"intensity":1,"dur":3.2}'>홈런 함성</button>
+        <button data-play="homerun">홈런 함성</button>
         <button data-play="ooh" data-opts='{"intensity":0.35}'>파울 "오~"</button>
         <button data-play="groan" data-opts='{"intensity":0.4}'>범타 "아~"</button>
         <button data-play="groan" data-opts='{"intensity":0.7}'>삼진 "아~"</button>
@@ -119,6 +120,7 @@
 
     <script src="../js/config.js"></script>
     <script src="../js/rng.js"></script>
+    <script src="../js/sounds-data.js"></script>
     <script src="../js/audio.js"></script>
     <script>
       (function () {
@@ -145,6 +147,13 @@
             }
           }
         });
+        const NAMES = { homerun: '홈런', cheer: '환호', applause: '박수', ooh: '오~', groan: '아~', ambience: '웅성거림' };
+        const LABEL = { recording: '녹음', loading: '불러오는 중', error: '녹음 오류(합성 사용)', synth: '합성' };
+        setInterval(() => {
+          const st = audio.sampleStatus();
+          document.getElementById('status').textContent =
+            '관중 소리: ' + Object.keys(NAMES).map((k) => NAMES[k] + ' ' + LABEL[st[k]]).join(' · ');
+        }, 500);
         let ambOn = false;
         document.getElementById('amb').addEventListener('click', (e) => {
           ambOn = !ambOn;

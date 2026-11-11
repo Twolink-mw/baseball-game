@@ -1,0 +1,76 @@
+// 관중 녹음(CC0)을 브라우저 코드에 내장한다: node tools/embed-sounds.js
+// sounds/ 폴더의 <슬롯>.(mp3|m4a|wav|ogg) 파일을 base64로 js/sounds-data.js 에 넣는다.
+// file:// 로 열어도 동작해야 해서(로컬 파일 fetch 불가) 음원을 일반 <script> 안의 텍스트로 싣는다.
+// Node 내장 모듈만 사용.
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+// 쓰는 슬롯 (js/config.js의 AUDIO.samples와 같은 이름)
+const SLOTS = ['homerun', 'cheer', 'applause', 'ooh', 'groan', 'ambience'];
+const MIME = { '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.wav': 'audio/wav', '.ogg': 'audio/ogg' };
+const WARN_TOTAL_BYTES = 1.5 * 1024 * 1024; // 전체가 이보다 크면 경고 (첫 로딩·PWA 캐시 부담)
+
+function findFiles(dir) {
+  const found = {};
+  if (!fs.existsSync(dir)) return found;
+  for (const name of fs.readdirSync(dir)) {
+    const ext = path.extname(name).toLowerCase();
+    const slot = path.basename(name, path.extname(name)).toLowerCase();
+    if (MIME[ext] && SLOTS.includes(slot)) {
+      if (found[slot]) throw new Error(`슬롯 '${slot}' 파일이 두 개 이상입니다: ${found[slot].name}, ${name}`);
+      found[slot] = { name, file: path.join(dir, name), mime: MIME[ext] };
+    }
+  }
+  return found;
+}
+
+// 파일 목록 → sounds-data.js 내용
+function buildSource(found) {
+  const lines = [
+    '// 자동 생성 파일: node tools/embed-sounds.js 로 다시 만든다. 직접 고치지 말 것.',
+    '// 출처와 라이선스는 sounds/CREDITS.md 참고.',
+    '(function (global) {',
+    "  'use strict';",
+    '  const BB = (global.BB = global.BB || {});',
+    '  BB.SOUND_DATA = {',
+  ];
+  for (const slot of SLOTS) {
+    const f = found[slot];
+    if (!f) continue;
+    const b64 = fs.readFileSync(f.file).toString('base64');
+    lines.push(`    ${slot}: { mime: '${f.mime}', src: '${f.name}', b64: '${b64}' },`);
+  }
+  lines.push('  };', "})(typeof window !== 'undefined' ? window : globalThis);", '');
+  return lines.join('\n');
+}
+
+function embed(soundsDir, outFile) {
+  const found = findFiles(soundsDir);
+  const src = buildSource(found);
+  fs.writeFileSync(outFile, src);
+  let total = 0;
+  const report = SLOTS.map((slot) => {
+    const f = found[slot];
+    if (!f) return `  ${slot.padEnd(9)} 없음 (합성음 사용)`;
+    const size = fs.statSync(f.file).size;
+    total += size;
+    return `  ${slot.padEnd(9)} ${f.name} (${(size / 1024).toFixed(0)}KB)`;
+  });
+  return { found, total, report, outBytes: Buffer.byteLength(src) };
+}
+
+if (require.main === module) {
+  const root = path.join(__dirname, '..');
+  const r = embed(path.join(root, 'sounds'), path.join(root, 'js', 'sounds-data.js'));
+  console.log('sounds/ → js/sounds-data.js');
+  console.log(r.report.join('\n'));
+  console.log(`원본 합계 ${(r.total / 1024).toFixed(0)}KB, 내장 파일 ${(r.outBytes / 1024).toFixed(0)}KB`);
+  if (r.total > WARN_TOTAL_BYTES) console.log('경고: 음원이 큽니다. 필요한 구간만 잘라 mp3(모노, 96~128kbps)로 넣는 것을 권장합니다.');
+  if (Object.keys(r.found).length && !fs.existsSync(path.join(root, 'sounds', 'CREDITS.md'))) {
+    console.log('주의: sounds/CREDITS.md 에 파일별 출처 URL·작성자·라이선스(CC0)를 적어 주세요.');
+  }
+}
+
+module.exports = { embed, findFiles, buildSource, SLOTS };

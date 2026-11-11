@@ -545,5 +545,43 @@ test('우타/좌타: 저장값 정규화·검증·병합', () => {
   assert.equal(S.mergeRecords(base, other).players['가'].bats, 'L');
 });
 
+
+section('관중 녹음 내장 도구');
+test('embed-sounds: 슬롯 이름 파일만 내장, base64 왕복, 같은 슬롯 중복은 오류', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const vm = require('vm');
+  const { embed } = require('../tools/embed-sounds.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-snd-'));
+  try {
+    const bytes = Buffer.from([1, 2, 3, 250, 0, 7]);
+    fs.writeFileSync(path.join(dir, 'Cheer.mp3'), bytes); // 대소문자 무시
+    fs.writeFileSync(path.join(dir, 'random.mp3'), bytes); // 슬롯 아님 → 무시
+    fs.writeFileSync(path.join(dir, 'notes.txt'), 'x'); // 음원 아님 → 무시
+    const out = path.join(dir, 'data.js');
+    const r = embed(dir, out);
+    assert.deepEqual(Object.keys(r.found), ['cheer']);
+    const sandbox = {};
+    vm.runInNewContext(fs.readFileSync(out, 'utf8'), { globalThis: sandbox });
+    const d = sandbox.BB.SOUND_DATA;
+    assert.deepEqual(Object.keys(d), ['cheer']);
+    assert.equal(d.cheer.mime, 'audio/mpeg');
+    assert.deepEqual(Buffer.from(d.cheer.b64, 'base64'), bytes);
+    // 파일이 없으면 빈 데이터
+    fs.rmSync(path.join(dir, 'Cheer.mp3'));
+    embed(dir, out);
+    const empty = {};
+    vm.runInNewContext(fs.readFileSync(out, 'utf8'), { globalThis: empty });
+    assert.deepEqual(Object.keys(empty.BB.SOUND_DATA), []);
+    // 같은 슬롯 두 개 → 오류
+    fs.writeFileSync(path.join(dir, 'groan.mp3'), bytes);
+    fs.writeFileSync(path.join(dir, 'groan.wav'), bytes);
+    assert.throws(() => embed(dir, out), /두 개 이상/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 console.log(`\n${passed} 통과, ${failed} 실패`);
 process.exitCode = failed ? 1 : 0;

@@ -1,5 +1,6 @@
-// 효과음: WebAudio로 코드 합성 (외부 음원 파일 없음)
-// 현실감을 위해: 구장 잔향(코드로 만든 임펄스 응답), 나무 배트 공명 모드, 가죽 미트, 관중 반응·박수·웅성거림 배경음.
+// 효과음: WebAudio. 타격·미트·바람 소리는 코드 합성,
+// 관중 소리(함성·환호·박수·"오~"·"아~"·웅성거림)는 CC0 녹음이 있으면 녹음(js/sounds-data.js), 없으면 합성.
+// 현실감을 위해: 구장 잔향(코드로 만든 임펄스 응답), 나무 배트 공명 모드, 가죽 미트.
 // 브라우저 정책상 첫 사용자 입력(unlock) 이후에만 AudioContext를 만든다.
 (function (global) {
   'use strict';
@@ -19,7 +20,9 @@
     let pink = null;
     let muted = false;
     let ambWanted = false;
-    let amb = null; // 배경 웅성거림 { gain }
+    let amb = null; // 배경 웅성거림 { gain, stop(), kind, target }
+    const samples = {}; // 슬롯 → 디코딩한 AudioBuffer
+    const sampleState = {}; // 슬롯 → 'loading' | 'ready' | 'error'
     const rng = BB.createRng(4242); // 장식용 (게임 RNG와 무관)
 
     // ---- 초기화 ----
@@ -42,7 +45,63 @@
       verbIn.connect(conv).connect(master);
       white = noiseBuffer(2, false);
       pink = noiseBuffer(3, true);
+      decodeSamples();
       if (ambWanted) setAmbience(true);
+    }
+
+    // 내장 녹음(base64) 디코딩. 실패하면 그 슬롯은 합성음으로
+    function decodeSamples() {
+      const data = BB.SOUND_DATA || {};
+      for (const [slot, d] of Object.entries(data)) {
+        sampleState[slot] = 'loading';
+        try {
+          const bin = global.atob(d.b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const done = (buf) => {
+            samples[slot] = buf;
+            sampleState[slot] = 'ready';
+            // 합성 웅성거림이 이미 돌고 있으면 녹음으로 교체
+            if (slot === 'ambience' && amb && amb.kind === 'synth') {
+              amb.stop();
+              amb = null;
+              if (ambWanted) setAmbience(true);
+            }
+          };
+          const fail = () => {
+            if (sampleState[slot] !== 'ready') sampleState[slot] = 'error';
+          };
+          // 오래된 Safari는 콜백 방식만 지원
+          const p = ctx.decodeAudioData(bytes.buffer, done, fail);
+          if (p && p.catch) p.catch(fail);
+        } catch (e) {
+          sampleState[slot] = 'error';
+        }
+      }
+    }
+
+    const hasSample = (slot) => !!samples[slot];
+
+    // 녹음 재생: config의 구간·음량에 intensity를 곱하고, 앞뒤를 부드럽게
+    function playSample(slot, t, intensity, durOverride) {
+      const s = A.samples[slot] || {};
+      const buf = samples[slot];
+      const offset = Math.min(s.offset || 0, Math.max(0, buf.duration - 0.05));
+      let dur = buf.duration - offset;
+      if (s.dur) dur = Math.min(dur, s.dur);
+      if (durOverride) dur = Math.min(dur, durOverride);
+      const peak = (s.gain == null ? 1 : s.gain) * (intensity == null ? 1 : intensity);
+      const fi = Math.min(s.fadeIn || 0.02, dur / 3);
+      const fo = Math.min(s.fadeOut || 0.2, dur / 2);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(peak, t + fi);
+      g.gain.setValueAtTime(peak, t + dur - fo);
+      g.gain.linearRampToValueAtTime(0.0001, t + dur);
+      src.connect(g).connect(out(s.wet == null ? 0.2 : s.wet));
+      src.start(t, offset, dur);
     }
 
     function unlock() {
@@ -312,14 +371,33 @@
       trem.stop(at + 0.1);
     }
 
-    // 배경 웅성거림 (경기 중에만). 켜고 끌 때 서서히
+    // 배경 웅성거림 (경기 중에만). 켜고 끌 때 서서히. 녹음이 있으면 녹음을 반복 재생
     function setAmbience(on) {
       ambWanted = !!on;
       if (!ctx) return;
+      if (!amb && on && hasSample('ambience')) {
+        const s = A.samples.ambience || {};
+        const buf = samples.ambience;
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        const lvl = ctx.createGain();
+        lvl.gain.value = s.gain == null ? 1 : s.gain;
+        lvl.connect(g).connect(out(s.wet == null ? 0.1 : s.wet));
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.loopStart = Math.min(s.offset || 0, Math.max(0, buf.duration - 0.1));
+        src.loopEnd = s.dur ? Math.min(buf.duration, src.loopStart + s.dur) : buf.duration;
+        src.connect(lvl);
+        src.start(ctx.currentTime, src.loopStart);
+        // 녹음 음량은 samples.ambience.gain으로 조절
+        amb = { gain: g, kind: 'sample', target: 1, stop: () => src.stop() };
+      }
       if (!amb && on) {
         const g = ctx.createGain();
         g.gain.value = 0.0001;
         g.connect(out(0.5));
+        const nodes = [];
         const layers = [[450, 0.6, 0.11, 1], [1100, 1.1, 0.29, 0.5], [2400, 1.5, 0.53, 0.25]];
         for (const [f, q, lfoHz, lvl] of layers) {
           const src = ctx.createBufferSource();
@@ -336,10 +414,11 @@
           src.connect(filter('bandpass', f, q)).connect(mod).connect(g);
           src.start(ctx.currentTime, rng.next() * 2);
           lfo.start(ctx.currentTime);
+          nodes.push(src, lfo);
         }
-        amb = { gain: g };
+        amb = { gain: g, kind: 'synth', target: A.ambience, stop: () => nodes.forEach((n) => n.stop()) };
       }
-      if (amb) amb.gain.gain.setTargetAtTime(on ? A.ambience : 0.0001, ctx.currentTime, on ? 0.6 : 0.3);
+      if (amb) amb.gain.gain.setTargetAtTime(on ? amb.target : 0.0001, ctx.currentTime, on ? 0.6 : 0.3);
     }
 
     // ---- 이름으로 재생 (게임 이벤트와 소리 확인 페이지에서 사용) ----
@@ -357,13 +436,22 @@
           return batCrack(t, o.clean == null ? 1 : o.clean, o.power == null ? 0.5 : o.power);
         case 'mitt':
           return mitt(t, o.speed || 150);
+        // 관중 소리: 녹음이 있으면 녹음, 없으면 합성
+        case 'homerun':
+          if (hasSample('homerun')) return playSample('homerun', t, 1);
+          crowd(t, 'cheer', 1, 3.2);
+          return play('applause', { level: 1, dur: 3, delay: (o.delay || 0) + 0.45 });
         case 'cheer':
+          if (hasSample('cheer')) return playSample('cheer', t, o.intensity == null ? 0.6 : o.intensity, o.dur);
           return crowd(t, 'cheer', o.intensity == null ? 0.6 : o.intensity, o.dur || 1.6);
         case 'ooh':
+          if (hasSample('ooh')) return playSample('ooh', t, o.intensity == null ? 0.5 : o.intensity, o.dur);
           return crowd(t, 'ooh', o.intensity == null ? 0.5 : o.intensity, o.dur || 0.9);
         case 'groan':
+          if (hasSample('groan')) return playSample('groan', t, o.intensity == null ? 0.6 : o.intensity, o.dur);
           return crowd(t, 'groan', o.intensity == null ? 0.6 : o.intensity, o.dur || 1.1);
         case 'applause':
+          if (hasSample('applause')) return playSample('applause', t, o.level == null ? 0.6 : o.level, o.dur);
           return applause(t, o.level == null ? 0.6 : o.level, o.dur || 2.5);
         case 'organ':
           return organ(t);
@@ -383,8 +471,7 @@
         switch (last.result) {
           case 'HOMERUN':
             play('bat', { clean: 1, power: 1 });
-            play('cheer', { intensity: 1, dur: 3.2, delay: 0.15 });
-            play('applause', { level: 1, dur: 3, delay: 0.6 });
+            play('homerun', { delay: 0.15 });
             break;
           case 'DOUBLE':
             play('bat', { clean, power: 0.7 });
@@ -425,7 +512,18 @@
       if (good) play('organ', { delay: 0.3 });
     }
 
-    return { unlock, setMuted, setAmbience, onGameEvent, fanfare, play, isMuted: () => muted };
+    // 슬롯별 상태 (소리 확인 페이지 표시용): 'recording' | 'loading' | 'error' | 'synth'
+    function sampleStatus() {
+      const st = {};
+      const data = BB.SOUND_DATA || {};
+      for (const slot of Object.keys(A.samples)) {
+        if (sampleState[slot] === 'ready') st[slot] = 'recording';
+        else st[slot] = sampleState[slot] || (data[slot] ? 'loading' : 'synth');
+      }
+      return st;
+    }
+
+    return { unlock, setMuted, setAmbience, onGameEvent, fanfare, play, sampleStatus, isMuted: () => muted };
   }
 
   Object.assign(BB, { createAudio });
