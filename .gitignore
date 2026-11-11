@@ -1,0 +1,5 @@
+# 녹음 원본은 저장소에 넣지 않음 (라이선스상 원본 단독 재배포 금지). 게임에는 잘라 낸 부분만 js/sounds-data.js로 포함
+sounds/*.mp3
+sounds/*.wav
+sounds/*.m4a
+sounds/*.ogg

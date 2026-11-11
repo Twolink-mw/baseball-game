@@ -1,4 +1,4 @@
-# 관중 녹음 출처 (CC0만 사용)
+# 관중 녹음 출처
 
 이 폴더에 아래 이름으로 파일을 넣고 `node tools/embed-sounds.js`를 실행하면 `js/sounds-data.js`에 내장됩니다.
 파일이 없는 슬롯은 코드로 합성한 소리를 그대로 씁니다.
@@ -13,12 +13,15 @@
 | `ambience.mp3` | 경기 중 관중 웅성거림 (반복 재생) |
 
 규칙
-- 라이선스가 **CC0(Creative Commons 0)** 인 녹음만 사용.
+- 라이선스: **CC0** 또는 **Pixabay Content License**(게임 안에 포함해 사용 가능, 원본만 따로 재배포 금지)처럼 출처 표기 없이 게임에 쓸 수 있는 것만.
 - 실존 구단·선수 이름 연호, 장내 아나운서 목소리, 음악(저작권)이 **들리는** 구간은 쓰지 않음.
-- mp3(모노, 96~128kbps) 권장. 필요한 구간만 쓰려면 `js/config.js`의 `AUDIO.samples`에서 시작 위치·길이·음량을 조정.
+- mp3 권장. `js/config.js`의 `AUDIO.samples`에 정한 구간(시작 위치·길이)만 잘라 넣으므로 원본이 길어도 됨(재인코딩 없음). 구간을 바꾸면 도구를 다시 실행.
 
 ## 사용한 파일
 
 | 슬롯 | 제목 | 작성자 | 출처 URL | 라이선스 | 사용 구간 |
 |---|---|---|---|---|---|
-| (예) cheer | Crowd Cheer | FoolBoyMedia | https://freesound.org/people/FoolBoyMedia/sounds/397434/ | CC0 | 0~4초 |
+| homerun | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 0.9~6.4초 (전체 33초) |
+| ambience | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 0~20초 반복 (전체 430초) |
+
+원본 mp3는 `.gitignore`로 저장소에서 제외한다(원본 단독 재배포 금지). 다른 PC에서 다시 내장하려면 원본을 이 폴더에 다시 넣고 도구를 실행.

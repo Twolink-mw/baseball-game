@@ -81,12 +81,17 @@
     }
 
     const hasSample = (slot) => !!samples[slot];
+    // 내장할 때 앞부분을 잘라냈으면(start초) 그만큼 재생 위치를 당긴다
+    const sampleOffset = (slot) => {
+      const d = (BB.SOUND_DATA || {})[slot] || {};
+      return Math.max(0, ((A.samples[slot] || {}).offset || 0) - (d.start || 0));
+    };
 
     // 녹음 재생: config의 구간·음량에 intensity를 곱하고, 앞뒤를 부드럽게
     function playSample(slot, t, intensity, durOverride) {
       const s = A.samples[slot] || {};
       const buf = samples[slot];
-      const offset = Math.min(s.offset || 0, Math.max(0, buf.duration - 0.05));
+      const offset = Math.min(sampleOffset(slot), Math.max(0, buf.duration - 0.05));
       let dur = buf.duration - offset;
       if (s.dur) dur = Math.min(dur, s.dur);
       if (durOverride) dur = Math.min(dur, durOverride);
@@ -386,7 +391,7 @@
         const src = ctx.createBufferSource();
         src.buffer = buf;
         src.loop = true;
-        src.loopStart = Math.min(s.offset || 0, Math.max(0, buf.duration - 0.1));
+        src.loopStart = Math.min(sampleOffset('ambience'), Math.max(0, buf.duration - 0.1));
         src.loopEnd = s.dur ? Math.min(buf.duration, src.loopStart + s.dur) : buf.duration;
         src.connect(lvl);
         src.start(ctx.currentTime, src.loopStart);

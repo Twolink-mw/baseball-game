@@ -547,37 +547,74 @@ test('우타/좌타: 저장값 정규화·검증·병합', () => {
 
 
 section('관중 녹음 내장 도구');
-test('embed-sounds: 슬롯 이름 파일만 내장, base64 왕복, 같은 슬롯 중복은 오류', () => {
+// 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
+function fakeMp3(n, withId3) {
+  const frames = [];
+  for (let i = 0; i < n; i++) {
+    const f = Buffer.alloc(417, i % 251);
+    f[0] = 0xff;
+    f[1] = 0xfb;
+    f[2] = 0x90;
+    f[3] = 0x00;
+    frames.push(f);
+  }
+  const id3 = Buffer.from([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 20, ...new Array(20).fill(0)]);
+  return Buffer.concat(withId3 ? [id3, ...frames] : frames);
+}
+test('trimMp3: ID3 태그를 빼고 프레임 단위로 구간만 남김', () => {
+  const { trimMp3, mp3Frames } = require('../tools/trim-audio.js');
+  const src = fakeMp3(200, true); // 약 5.22초
+  assert.equal(mp3Frames(src).length, 200);
+  const r = trimMp3(src, 1, 1);
+  const fd = 1152 / 44100;
+  assert.ok(Math.abs(r.total - 200 * fd) < 1e-9);
+  assert.ok(r.start <= 1 && r.start > 1 - fd, '시작은 1초를 덮는 프레임');
+  assert.ok(r.start + r.duration >= 2 && r.duration < 1 + 2 * fd + 1e-9);
+  assert.equal(r.buf.length % 417, 0);
+  assert.equal(r.buf[0], 0xff, '맨 앞이 바로 프레임(ID3 제거)');
+  assert.equal(mp3Frames(r.buf).length, r.buf.length / 417);
+  assert.equal(trimMp3(src, 0, null).buf.length, 200 * 417, '길이 미지정이면 끝까지');
+  assert.throws(() => trimMp3(src, 10, 1), /벗어났습니다/);
+});
+test('embed-sounds: 슬롯 이름 파일만 설정 구간으로 잘라 내장, base64 왕복, 같은 슬롯 중복은 오류', () => {
   const fs = require('fs');
   const os = require('os');
   const path = require('path');
   const vm = require('vm');
   const { embed } = require('../tools/embed-sounds.js');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bb-snd-'));
+  const load = (file) => {
+    const sandbox = {};
+    vm.runInNewContext(fs.readFileSync(file, 'utf8'), { globalThis: sandbox });
+    return sandbox.BB.SOUND_DATA;
+  };
   try {
-    const bytes = Buffer.from([1, 2, 3, 250, 0, 7]);
-    fs.writeFileSync(path.join(dir, 'Cheer.mp3'), bytes); // 대소문자 무시
-    fs.writeFileSync(path.join(dir, 'random.mp3'), bytes); // 슬롯 아님 → 무시
+    const mp3 = fakeMp3(200, false);
+    fs.writeFileSync(path.join(dir, 'Cheer.mp3'), mp3); // 대소문자 무시
+    fs.writeFileSync(path.join(dir, 'random.mp3'), mp3); // 슬롯 아님 → 무시
     fs.writeFileSync(path.join(dir, 'notes.txt'), 'x'); // 음원 아님 → 무시
     const out = path.join(dir, 'data.js');
-    const r = embed(dir, out);
+    // 구간 지정: 2초부터 1초 → 내장 데이터의 start는 약 2초, 크기는 원본보다 작음
+    const r = embed(dir, out, { cheer: { offset: 2, dur: 1 } });
     assert.deepEqual(Object.keys(r.found), ['cheer']);
-    const sandbox = {};
-    vm.runInNewContext(fs.readFileSync(out, 'utf8'), { globalThis: sandbox });
-    const d = sandbox.BB.SOUND_DATA;
+    let d = load(out);
     assert.deepEqual(Object.keys(d), ['cheer']);
     assert.equal(d.cheer.mime, 'audio/mpeg');
-    assert.deepEqual(Buffer.from(d.cheer.b64, 'base64'), bytes);
+    assert.ok(Math.abs(d.cheer.start - 2) < 0.03);
+    assert.ok(Buffer.from(d.cheer.b64, 'base64').length < mp3.length / 3);
+    // 구간 설정이 없으면 전체를 그대로
+    embed(dir, out, {});
+    d = load(out);
+    assert.deepEqual(Buffer.from(d.cheer.b64, 'base64'), mp3);
+    assert.equal(d.cheer.start, 0);
     // 파일이 없으면 빈 데이터
     fs.rmSync(path.join(dir, 'Cheer.mp3'));
-    embed(dir, out);
-    const empty = {};
-    vm.runInNewContext(fs.readFileSync(out, 'utf8'), { globalThis: empty });
-    assert.deepEqual(Object.keys(empty.BB.SOUND_DATA), []);
+    embed(dir, out, {});
+    assert.deepEqual(Object.keys(load(out)), []);
     // 같은 슬롯 두 개 → 오류
-    fs.writeFileSync(path.join(dir, 'groan.mp3'), bytes);
-    fs.writeFileSync(path.join(dir, 'groan.wav'), bytes);
-    assert.throws(() => embed(dir, out), /두 개 이상/);
+    fs.writeFileSync(path.join(dir, 'groan.mp3'), mp3);
+    fs.writeFileSync(path.join(dir, 'groan.wav'), mp3);
+    assert.throws(() => embed(dir, out, {}), /두 개 이상/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
