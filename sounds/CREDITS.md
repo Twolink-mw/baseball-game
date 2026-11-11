@@ -22,6 +22,6 @@
 | 슬롯 | 제목 | 작성자 | 출처 URL | 라이선스 | 사용 구간 |
 |---|---|---|---|---|---|
 | homerun | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 0.9~6.4초 (전체 33초) |
-| ambience | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 0~20초 반복 (전체 430초) |
+| ambience | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 50초~1분18초 반복 (전체 430초) |
 
 원본 mp3는 `.gitignore`로 저장소에서 제외한다(원본 단독 재배포 금지). 다른 PC에서 다시 내장하려면 원본을 이 폴더에 다시 넣고 도구를 실행.

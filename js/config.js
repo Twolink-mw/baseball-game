@@ -115,7 +115,7 @@
         applause: { offset: 0, dur: 3, gain: 0.6, fadeIn: 0.1, fadeOut: 0.8, wet: 0.2 },
         ooh: { offset: 0, dur: 1.2, gain: 0.6, fadeIn: 0.05, fadeOut: 0.4, wet: 0.2 },
         groan: { offset: 0, dur: 1.4, gain: 0.6, fadeIn: 0.05, fadeOut: 0.4, wet: 0.2 },
-        ambience: { offset: 0, dur: 20, gain: 0.08, wet: 0.1 }, // 반복 재생 (offset ~ offset+dur 구간)
+        ambience: { offset: 50, dur: 28, gain: 0.08, wet: 0.1 }, // 반복 재생: 녹음의 50초~1분18초
       },
     },
 
