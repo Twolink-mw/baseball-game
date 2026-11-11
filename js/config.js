@@ -75,10 +75,22 @@
       width: 1280,
       height: 720,
       zone: { cx: 640, cy: 440, w: 260, h: 270 },
-      release: { x: 640, y: 290 },
+      release: { x: 634, y: 258 }, // 투수 손(릴리스 자세)과 맞춘 값
       ballR0: 3,
       ballR1: 14,
       maxDpr: 2,
+      // 구장 원근 투영: 홈플레이트 기준 (x 좌우, z 투수 방향) 피트 → 화면
+      view: { horizonY: 215, camDist: 14.74, focal: 1300, camHeight: 5.5 },
+      pitcher: { x: 640, y: 312, scale: 1 }, // 발 위치
+      batter: { x: 925, y: 708 }, // 발 사이 중앙
+    },
+
+    // 연출(초)
+    FX: {
+      swingSec: 0.18, // 클릭 후 배트가 다 돌아가는 시간
+      trailSec: 0.035, // 공 잔상 간격
+      flashSec: 0.15, // 타구 순간 섬광
+      cloudSpeed: 6, // 구름 이동 (논리 px/초)
     },
 
     STORAGE_KEY: 'bbgame.v1',

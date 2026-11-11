@@ -56,7 +56,8 @@ baseball-game/
 │  ├─ pitcher.js          # 투구 생성 + 투수 AI (순수 로직)
 │  ├─ judge.js            # 판정 (순수 로직)
 │  ├─ game.js             # 게임 상태 머신, 카운트, 타석/타율 (순수 로직)
-│  ├─ renderer.js         # Canvas 그리기
+│  ├─ scene.js            # 구장 배경(원근 투영, 캐시)·투수·타자 그리기
+│  ├─ renderer.js         # Canvas 그리기 (공·존·연출·HUD·각 화면)
 │  ├─ input.js            # 마우스/터치/키보드 입력, 터치 패드
 │  ├─ audio.js            # WebAudio 효과음
 │  ├─ storage.js          # localStorage + 기록 검증/병합(순수 함수)

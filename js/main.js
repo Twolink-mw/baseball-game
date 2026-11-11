@@ -266,6 +266,7 @@
       result: app.result,
       hover: app.hover,
       today: today(),
+      now: ts / 1000, // 구름 등 장식 애니메이션용
     });
     global.requestAnimationFrame(frame);
   }

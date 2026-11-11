@@ -1,11 +1,13 @@
 // Canvas 그리기. 상태를 읽어서 그리기만 하고, 그린 버튼 영역을 돌려준다.
-// M1: 도형만 쓰는 임시 화면
+// 구장/투수/타자 그림은 scene.js, 여기서는 공·존·연출·HUD·각 화면을 그린다.
 (function (global) {
   'use strict';
 
   const BB = global.BB;
   const C = BB.CONFIG;
   const L = C.LAYOUT;
+  const S = BB.scene;
+  const FX = C.FX;
   const FONT = 'system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
 
   const RESULT_TEXT = {
@@ -17,14 +19,23 @@
     SWING_MISS: '헛스윙',
     LOOKING: '루킹 스트라이크',
   };
+  const HITS = { HOMERUN: 1, DOUBLE: 1, SINGLE: 1 };
+  const BOARD_FLASH = { HOMERUN: 'HOME RUN!', DOUBLE: '2루타!', SINGLE: 'HIT!' };
 
   const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+  // 공 원근: 반지름이 거리에 반비례하도록. t=0에서 ballR0, t=1에서 ballR1
+  const PA = L.ballR0 / (L.ballR1 - L.ballR0);
+  const ballRadius = (t) => (L.ballR1 * PA) / Math.max(PA + 1 - t, 0.05);
+  // 화면상 진행도(원근 때문에 처음엔 느리고 도착 직전에 빨라짐). t=0 → 0, t=1 → 1
+  const screenProgress = (t) => (1 / Math.max(PA + 1 - t, 0.05) - 1 / (PA + 1)) / (1 / PA - 1 / (PA + 1));
 
   function createRenderer(canvas) {
     const ctx = canvas.getContext('2d');
     let dpr = 1;
     let hits = [];
+    let bg = null; // 고정 배경 캐시(실제 픽셀 크기)
 
     function resize() {
       const vw = global.innerWidth;
@@ -35,8 +46,13 @@
       dpr = Math.min(global.devicePixelRatio || 1, L.maxDpr);
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
-      canvas.width = Math.round(cssW * dpr);
-      canvas.height = Math.round(cssH * dpr);
+      const w = Math.round(cssW * dpr);
+      const h = Math.round(cssH * dpr);
+      if (canvas.width !== w || canvas.height !== h || !bg) {
+        canvas.width = w;
+        canvas.height = h;
+        bg = S.buildBackground(w, h);
+      }
     }
 
     function toLogical(clientX, clientY) {
@@ -60,19 +76,28 @@
       return { x: z.x + z.cw * (cell.col + 0.5), y: z.y + z.ch * (cell.row + 0.5) };
     }
 
-    // 공개 전에는 존 중앙을 향하고, 공개 구간에서 실제 코스로 휜다
+    // 공 위치. 공개 전(시간 기준)에는 존 중앙을 향하고, 공개 구간에서 실제 코스로 휜다.
+    // 화면 이동량은 원근 진행도를 따른다. t>1이면 포수 쪽(아래)으로 빠져나간다.
     function ballPos(pitch, t) {
       const center = { x: L.zone.cx, y: L.zone.cy };
       const target = cellCenter(pitch.cell);
       const u = Math.max(0, 1 - pitch.revealSec / pitch.flightSec);
       const tt = Math.min(t, 1);
-      if (tt <= u) return lerp(L.release, center, tt);
-      const pu = lerp(L.release, center, u);
-      const s = (tt - u) / (1 - u);
-      const base = lerp(pu, target, s);
-      const bend = C.PITCH_TYPES[pitch.type].bend;
-      const k = 4 * s * (1 - s);
-      return { x: base.x + bend.x * k, y: base.y - bend.y * k };
+      const sp = screenProgress(tt);
+      const su = screenProgress(u);
+      let p;
+      if (tt <= u) {
+        p = lerp(L.release, center, sp);
+      } else {
+        const pu = lerp(L.release, center, su);
+        const s = su < 1 ? (sp - su) / (1 - su) : 1;
+        const base = lerp(pu, target, s);
+        const bend = C.PITCH_TYPES[pitch.type].bend;
+        const k = 4 * s * (1 - s);
+        p = { x: base.x + bend.x * k, y: base.y - bend.y * k };
+      }
+      if (t > 1) p = { x: p.x, y: p.y + (t - 1) * 600 };
+      return p;
     }
 
     // ---- 그리기 도우미 ----
@@ -81,6 +106,19 @@
       ctx.fillStyle = color || '#fff';
       ctx.textAlign = align || 'left';
       ctx.textBaseline = 'middle';
+      ctx.fillText(str, x, y);
+    }
+
+    // 외곽선 있는 큰 글자
+    function outlined(str, x, y, size, color) {
+      ctx.font = 'bold ' + size + 'px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = Math.max(4, size / 8);
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.strokeText(str, x, y);
+      ctx.fillStyle = color;
       ctx.fillText(str, x, y);
     }
 
@@ -107,91 +145,36 @@
       if (!disabled) hits.push({ id, x, y, w, h });
     }
 
-    // ---- 화면별 ----
-    function drawField() {
-      const sky = ctx.createLinearGradient(0, 0, 0, 300);
-      sky.addColorStop(0, '#3b6fb6');
-      sky.addColorStop(1, '#9cc4e8');
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, L.width, 300);
-      ctx.fillStyle = '#1f3d2a'; // 먼 관중석
-      ctx.fillRect(0, 200, L.width, 60);
-      ctx.fillStyle = '#2c7a3f';
-      ctx.fillRect(0, 260, L.width, L.height - 260);
-      ctx.fillStyle = '#b5834f'; // 마운드
-      ctx.beginPath();
-      ctx.ellipse(640, 300, 90, 16, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#c69460'; // 타석 흙
-      ctx.beginPath();
-      ctx.ellipse(640, 700, 420, 90, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff'; // 홈플레이트
-      ctx.beginPath();
-      ctx.moveTo(600, 660);
-      ctx.lineTo(680, 660);
-      ctx.lineTo(690, 680);
-      ctx.lineTo(640, 700);
-      ctx.lineTo(590, 680);
-      ctx.closePath();
-      ctx.fill();
+    // 구장 배경(하늘+캐시) + 덮개
+    function drawBackdrop(now, shade) {
+      S.drawSky(ctx, now);
+      if (bg) ctx.drawImage(bg, 0, 0, L.width, L.height);
+      if (shade) {
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, L.width, L.height);
+      }
     }
 
+    // ---- 게임 화면 ----
     function drawPitcher(g) {
-      let pose = 'set';
-      if (g.phase === 'PITCH_WINDUP') pose = g.phaseElapsed() < C.WINDUP_SEC / 2 ? 'leg' : 'back';
-      else if (g.phase === 'PITCH_FLIGHT' && g.time - g.releaseTime < 0.2) pose = 'follow';
-      const x = 640;
-      const y = 296;
-      ctx.fillStyle = '#e8e8e8';
-      ctx.fillRect(x - 9, y - 50, 18, 30); // 몸통
-      ctx.beginPath();
-      ctx.arc(x, y - 58, 8, 0, Math.PI * 2); // 머리
-      ctx.fill();
-      ctx.strokeStyle = '#e8e8e8';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      // 다리
-      ctx.moveTo(x - 5, y - 20);
-      ctx.lineTo(x - 8, y);
-      ctx.moveTo(x + 5, y - 20);
-      if (pose === 'leg') ctx.lineTo(x + 16, y - 26);
-      else ctx.lineTo(x + 8, y);
-      // 팔
-      ctx.moveTo(x + 8, y - 46);
-      if (pose === 'back') ctx.lineTo(x + 24, y - 66);
-      else if (pose === 'follow') ctx.lineTo(x - 18, y - 28);
-      else ctx.lineTo(x + 12, y - 30);
-      ctx.stroke();
+      let el = 0;
+      if (g.phase === 'PITCH_WINDUP') el = g.phaseElapsed() / C.WINDUP_SEC;
+      else if (g.phase === 'PITCH_FLIGHT') el = g.time - g.releaseTime;
+      else if (g.phase === 'RESULT_SHOW') el = g.phaseElapsed();
+      S.drawPitcher(ctx, S.pitcherPose(g.phase, el, el));
     }
 
     function drawBatter(g) {
-      const x = 900;
-      const y = 650;
-      ctx.fillStyle = '#1d2433';
-      ctx.fillRect(x - 25, y - 170, 50, 110);
-      ctx.beginPath();
-      ctx.arc(x, y - 190, 24, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillRect(x - 25, y - 60, 20, 70);
-      ctx.fillRect(x + 5, y - 60, 20, 70);
-      // 배트: 클릭 시점부터 스윙
-      let a = -2.2; // 준비 자세(뒤로 젖힘)
+      let swing = null;
       if (g.click && (g.phase === 'PITCH_FLIGHT' || g.phase === 'RESULT_SHOW')) {
-        const s = clamp01((g.time - g.click.atTime) / 0.18);
-        a = -2.2 + s * 3.2;
+        swing = clamp01((g.time - g.click.atTime) / FX.swingSec);
       }
-      ctx.save();
-      ctx.translate(x - 20, y - 130);
-      ctx.rotate(a);
-      ctx.fillStyle = '#c9a26b';
-      ctx.fillRect(0, -6, 150, 12);
-      ctx.restore();
+      S.drawBatter(ctx, swing);
     }
 
     function drawZone(g, hover) {
       const z = zoneRect();
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
       ctx.fillRect(z.x, z.y, z.w, z.h);
       if (hover && g.phase === 'PITCH_FLIGHT' && !g.click) {
         ctx.fillStyle = 'rgba(255,255,160,0.22)';
@@ -200,38 +183,57 @@
         ctx.lineWidth = 3;
         ctx.strokeRect(z.x + hover.col * z.cw + 1.5, z.y + hover.row * z.ch + 1.5, z.cw - 3, z.ch - 3);
       }
-      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      for (let i = 0; i <= 3; i++) {
+      for (let i = 1; i < 3; i++) {
         ctx.moveTo(z.x + z.cw * i, z.y);
         ctx.lineTo(z.x + z.cw * i, z.y + z.h);
         ctx.moveTo(z.x, z.y + z.ch * i);
         ctx.lineTo(z.x + z.w, z.y + z.ch * i);
       }
       ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(z.x, z.y, z.w, z.h);
+    }
+
+    function ballSprite(p, r, alpha, spin) {
+      if (alpha <= 0) return;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      if (r >= 4) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(spin);
+        ctx.strokeStyle = '#c33';
+        ctx.lineWidth = Math.max(1, r / 7);
+        ctx.beginPath();
+        ctx.arc(-r * 0.9, 0, r * 0.7, -0.9, 0.9);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(r * 0.9, 0, r * 0.7, Math.PI - 0.9, Math.PI + 0.9);
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
     }
 
     function drawBall(g) {
       const t = g.ballProgress();
-      if (t !== null && t <= 1.15) {
-        const p = ballPos(g.pitch, t);
-        const tt = Math.min(t, 1);
-        const r = L.ballR0 + (L.ballR1 - L.ballR0) * tt * tt;
-        ctx.globalAlpha = t > 1 ? 1 - (t - 1) / 0.15 : 1;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#c33';
-        ctx.lineWidth = Math.max(1, r / 6);
-        ctx.beginPath();
-        ctx.arc(p.x - r * 0.9, p.y, r * 0.7, -0.9, 0.9);
-        ctx.arc(p.x + r * 0.9, p.y, r * 0.7, Math.PI - 0.9, Math.PI + 0.9);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+      if (t !== null && t >= 0 && t <= 1.2) {
+        const fade = t > 1 ? Math.max(0, 1 - (t - 1) / 0.2) : 1;
+        for (let k = 3; k >= 1; k--) {
+          const tk = t - (k * FX.trailSec) / g.pitch.flightSec;
+          if (tk < 0) continue;
+          ballSprite(ballPos(g.pitch, tk), ballRadius(tk) * 0.9, (0.22 / k) * fade, 0);
+        }
+        ballSprite(ballPos(g.pitch, t), ballRadius(t), fade, t * g.pitch.flightSec * 40);
       }
-      // 결과 연출 중: 실제 코스를 흐린 공으로 표시
+      // 결과 연출 중: 실제 코스를 점선 원으로 표시
       if (g.phase === 'RESULT_SHOW' && g.last) {
         const p = cellCenter(g.last.pitch.cell);
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -256,6 +258,120 @@
       ctx.stroke();
     }
 
+    // ---- 타구 연출 ----
+    // 타이밍이 빠르면 당겨 친 방향(화면 오른쪽), 늦으면 반대 방향
+    function hitDir(last) {
+      let d = last.deltaSec === null ? 0 : -last.deltaSec / 0.1;
+      d += (last.pitch.cell.col - 1) * 0.25;
+      return Math.max(-1, Math.min(1, d));
+    }
+
+    function flightSpec(g) {
+      const last = g.last;
+      const d = hitDir(last);
+      const side = d >= 0 ? 1 : -1;
+      switch (last.result) {
+        case 'HOMERUN':
+          return { dur: 1.0, tx: 640 + d * 380, ty: 110, apex: 300, r1: 2 };
+        case 'DOUBLE':
+          return { dur: 0.9, tx: 640 + side * 220 + d * 300, ty: S.fenceY() - 8, apex: 170, r1: 3 };
+        case 'SINGLE':
+          return { dur: 0.7, tx: 640 + d * 300, ty: 300, apex: 60, r1: 4 };
+        case 'FOUL':
+          return { dur: 0.6, tx: 640 + side * 760, ty: -140, apex: 0, r1: 34 };
+        case 'OUT_BIP':
+          return g.totalPitches % 2
+            ? { dur: 1.0, tx: 640 + d * 150, ty: 250, apex: 420, r1: 4 } // 뜬공
+            : { dur: 0.8, tx: 640 + d * 120, ty: 322, apex: 0, r1: 4, ground: true }; // 땅볼
+      }
+      return null;
+    }
+
+    function flightPos(spec, from, e) {
+      const u = clamp01(e / spec.dur);
+      const uu = 1 - (1 - u) * (1 - u);
+      const x = from.x + (spec.tx - from.x) * uu;
+      let y = from.y + (spec.ty - from.y) * uu - spec.apex * 4 * uu * (1 - uu);
+      if (spec.ground) y -= 36 * Math.abs(Math.sin(uu * Math.PI * 3)) * (1 - uu);
+      return { x, y, r: L.ballR1 + (spec.r1 - L.ballR1) * uu };
+    }
+
+    function isContact(last) {
+      return !!last.clickCell && last.result !== 'SWING_MISS' && last.result !== 'LOOKING';
+    }
+
+    function drawHitFx(g) {
+      if (g.phase !== 'RESULT_SHOW' || !g.last || !isContact(g.last)) return;
+      const last = g.last;
+      const e = g.phaseElapsed();
+      const from = cellCenter(last.pitch.cell);
+      // 맞는 순간 섬광
+      if (e < FX.flashSec) {
+        const k = e / FX.flashSec;
+        ctx.save();
+        ctx.globalAlpha = 1 - k;
+        ctx.strokeStyle = '#fff8d0';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 10; i++) {
+          const a = (i / 10) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(from.x + Math.cos(a) * (14 + 30 * k), from.y + Math.sin(a) * (14 + 30 * k));
+          ctx.lineTo(from.x + Math.cos(a) * (30 + 60 * k), from.y + Math.sin(a) * (30 + 60 * k));
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      const spec = flightSpec(g);
+      if (!spec) return;
+      const fade = e > spec.dur ? Math.max(0, 1 - (e - spec.dur) / 0.25) : 1;
+      if (fade > 0) {
+        // 궤적 꼬리
+        ctx.save();
+        ctx.globalAlpha = 0.45 * fade;
+        ctx.strokeStyle = '#fff';
+        ctx.lineCap = 'round';
+        let prev = flightPos(spec, from, e);
+        for (let k = 1; k <= 6; k++) {
+          const p = flightPos(spec, from, Math.max(0, e - k * 0.03));
+          ctx.lineWidth = Math.max(1, prev.r * 0.7 * (1 - k / 7));
+          ctx.beginPath();
+          ctx.moveTo(prev.x, prev.y);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+          prev = p;
+        }
+        ctx.restore();
+        const p = flightPos(spec, from, e);
+        ballSprite(p, p.r, fade, e * 30);
+      }
+      if (last.result === 'HOMERUN') drawFireworks(g, e);
+    }
+
+    // 홈런 불꽃: 위치와 색은 타석마다 고정된 장식용 RNG로 정함(게임 RNG와 무관)
+    function drawFireworks(g, e) {
+      const rng = BB.createRng(g.totalPitches * 7919 + g.atBat);
+      const colors = ['#ffd34d', '#ff6b6b', '#7cf29a', '#7cc4ff', '#ffffff'];
+      for (let b = 0; b < 3; b++) {
+        const t0 = 0.45 + b * 0.15;
+        const cx = 260 + rng.next() * 760;
+        const cy = 50 + rng.next() * 70;
+        const col = colors[rng.int(colors.length)];
+        const k = (e - t0) / 0.7;
+        if (k <= 0 || k >= 1) continue;
+        ctx.globalAlpha = 1 - k;
+        ctx.fillStyle = col;
+        const rr = 70 * (1 - (1 - k) * (1 - k));
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr + 30 * k * k, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
     function lamp(x, y, on, color) {
       ctx.beginPath();
       ctx.arc(x, y, 9, 0, Math.PI * 2);
@@ -278,6 +394,11 @@
       text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 186, 16, '#ccc', 'right');
     }
 
+    function drawBoard(g, now) {
+      const flash = g.phase === 'RESULT_SHOW' && g.last ? BOARD_FLASH[g.last.result] || null : null;
+      S.drawScoreboard(ctx, 'BB 스타디움', g.playerName + ' · ' + BB.formatAvg(g.currentAverage()), flash, now);
+    }
+
     function drawBubble(g) {
       if (!g.pitch || (g.phase !== 'PITCH_FLIGHT' && g.phase !== 'RESULT_SHOW')) return;
       const s = g.pitchInAtBat + '구 ' + g.pitch.type + ' ' + g.pitch.speed + 'km/h';
@@ -287,38 +408,83 @@
       text(s, 640, 44, 22, '#123', 'center', 'bold');
     }
 
+    // 타이밍 피드백: 등급 + 얼마나 빠르고 늦었는지
+    function timingBadge(last) {
+      if (!last.timing || last.timing === 'NONE' || last.deltaSec === null) return null;
+      const d = last.deltaSec;
+      const detail = Math.abs(d) < 0.005 ? '딱 맞음' : Math.abs(d).toFixed(2) + '초 ' + (d < 0 ? '빠름' : '늦음');
+      if (last.timing === 'PERFECT') return { label: '정확', detail, color: '#ffd34d' };
+      if (last.timing === 'GOOD') return { label: '좋음', detail, color: '#7cf29a' };
+      return d < 0 ? { label: '빠름', detail, color: '#7cc4ff' } : { label: '늦음', detail, color: '#ff9f5a' };
+    }
+
+    // 튀어나오는 크기 (0→1.15→1)
+    function popScale(e) {
+      const k = clamp01(e / 0.22);
+      const c1 = 2.2;
+      return 1 + (c1 + 1) * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+    }
+
     function drawCenterMessage(g) {
       if (g.phase === 'AT_BAT_INTRO') {
-        text(g.atBat + '번째 타석', 640, 150, 40, '#fff', 'center', 'bold');
+        const e = g.phaseElapsed();
+        ctx.globalAlpha = clamp01(e / 0.2) * clamp01((C.AT_BAT_INTRO_SEC - e) / 0.2 + 0.3);
+        outlined(g.atBat + '번째 타석', 640, 150 - 10 * clamp01(e / 0.3), 44, '#fff');
+        ctx.globalAlpha = 1;
         return;
       }
       if (g.phase !== 'RESULT_SHOW' || !g.last) return;
       const last = g.last;
+      const e = g.phaseElapsed();
       let main = RESULT_TEXT[last.result];
       if (last.atBatOutcome === 'STRIKEOUT') main = last.result === 'LOOKING' ? '루킹 삼진!' : '삼진 아웃!';
       if (last.foulCapped) main = '파울 → 범타 처리';
-      const hit = last.result === 'HOMERUN' || last.result === 'DOUBLE' || last.result === 'SINGLE';
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.font = 'bold 56px ' + FONT;
-      ctx.textAlign = 'center';
-      ctx.strokeText(main, 640, 140);
-      text(main, 640, 140, 56, hit ? '#ffd34d' : '#fff', 'center', 'bold');
-      let sub = '';
-      if (last.timing === 'PERFECT') sub = '타이밍 정확';
-      else if (last.timing === 'GOOD') sub = '타이밍 좋음';
-      else if (last.timing === 'BAD') sub = last.deltaSec < 0 ? '타이밍 빠름' : '타이밍 늦음';
-      if (sub) text(sub, 640, 192, 24, '#eee', 'center', 'bold');
+      const hit = !!HITS[last.result];
+      const color = last.result === 'HOMERUN' ? '#ffd34d' : hit ? '#ffe9a0' : last.atBatOutcome === 'STRIKEOUT' ? '#ff8a8a' : '#fff';
+      ctx.save();
+      ctx.translate(640, 140);
+      const sc = Math.max(0.01, popScale(e));
+      ctx.scale(sc, sc);
+      outlined(main, 0, 0, last.result === 'HOMERUN' ? 72 : 56, color);
+      ctx.restore();
+      const badge = timingBadge(last);
+      if (badge) {
+        ctx.globalAlpha = clamp01((e - 0.08) / 0.15);
+        const w = 250;
+        roundRect(640 - w / 2, 184, w, 40, 20);
+        ctx.fillStyle = 'rgba(10,15,25,0.75)';
+        ctx.fill();
+        ctx.strokeStyle = badge.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        text(badge.label, 640 - w / 2 + 22, 204, 22, badge.color, 'left', 'bold');
+        text(badge.detail, 640 + w / 2 - 22, 204, 18, '#eee', 'right');
+        ctx.globalAlpha = 1;
+      }
+    }
+    // 홈런 직후 짧은 화면 흔들림
+    function shakeOffset(g) {
+      if (g.phase !== 'RESULT_SHOW' || !g.last || g.last.result !== 'HOMERUN') return 0;
+      const e = g.phaseElapsed();
+      if (e > 0.35) return 0;
+      return Math.sin(e * 90) * 6 * (1 - e / 0.35);
     }
 
     function drawGame(view) {
       const g = view.game;
-      drawField();
+      const now = view.now;
+      const sh = g.paused ? 0 : shakeOffset(g);
+      ctx.save();
+      ctx.translate(0, sh);
+      drawBackdrop(now);
+      drawBoard(g, now);
       drawPitcher(g);
       drawBatter(g);
       drawZone(g, view.hover);
       drawBall(g);
       drawClickMarker(g);
+      drawHitFx(g);
+      ctx.restore();
       drawHud(g, view);
       drawBubble(g);
       drawCenterMessage(g);
@@ -335,19 +501,15 @@
     }
 
     function drawTitle(view) {
-      const bg = ctx.createLinearGradient(0, 0, 0, L.height);
-      bg.addColorStop(0, '#0f2240');
-      bg.addColorStop(1, '#1d4d32');
-      ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, L.width, L.height);
-      text('타자 시점 야구', 640, 56, 52, '#fff', 'center', 'bold');
+      drawBackdrop(view.now, 'rgba(8,14,26,0.62)');
+      outlined('타자 시점 야구', 640, 56, 52, '#fff');
       text('코스가 보이면, 공이 도착하는 순간에 맞춰 누르세요', 640, 104, 20, '#cfe', 'center');
 
       // 현재 타자 배너
       const bx = 640 - 330;
       const by = 128;
       roundRect(bx, by, 660, 54, 12);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fill();
       const p = view.player;
       if (p) {
@@ -369,7 +531,7 @@
         const y = 200;
         const unlocked = rec.unlocked[i];
         roundRect(x, y, cw, 220, 16);
-        ctx.fillStyle = unlocked ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.35)';
+        ctx.fillStyle = unlocked ? 'rgba(20,32,52,0.82)' : 'rgba(0,0,0,0.6)';
         ctx.fill();
         ctx.strokeStyle = unlocked ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
         ctx.lineWidth = 2;
@@ -393,7 +555,7 @@
       const cx = 640 - 300;
       const cy = 450;
       roundRect(cx, cy, 600, 110, 16);
-      ctx.fillStyle = 'rgba(255,211,77,0.15)';
+      ctx.fillStyle = 'rgba(60,46,10,0.8)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,211,77,0.8)';
       ctx.lineWidth = 2;
@@ -410,8 +572,7 @@
 
     // 타자 기록(순위표)
     function drawPlayers(view) {
-      ctx.fillStyle = '#0f1c30';
-      ctx.fillRect(0, 0, L.width, L.height);
+      drawBackdrop(view.now, 'rgba(8,14,26,0.86)');
       text('타자 기록', 640, 56, 36, '#fff', 'center', 'bold');
       const list = view.ranking;
       const per = C.LEADERBOARD_PAGE;
@@ -458,8 +619,7 @@
     function drawResult(view) {
       const r = view.result;
       const s = r.summary;
-      ctx.fillStyle = '#0f1c30';
-      ctx.fillRect(0, 0, L.width, L.height);
+      drawBackdrop(view.now, 'rgba(8,14,26,0.84)');
       const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
       text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
       text('이번 타율', 640, 118, 24, '#aaa', 'center');
