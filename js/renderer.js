@@ -170,7 +170,8 @@
     // ---- 게임 화면 ----
     function drawPitcher(g) {
       let el = 0;
-      if (g.phase === 'PITCH_WINDUP') el = g.phaseElapsed() / C.WINDUP_SEC;
+      // 와인드업: 멈춤 구간은 세트 자세, 이후 투구 동작 진행도(0~1)
+      if (g.phase === 'PITCH_WINDUP') el = Math.max(0, (g.phaseElapsed() - g.pitch.holdSec) / g.pitch.motionSec);
       else if (g.phase === 'PITCH_FLIGHT') el = g.time - g.releaseTime;
       else if (g.phase === 'RESULT_SHOW') el = g.phaseElapsed();
       S.drawPitcher(ctx, S.pitcherPose(g.phase, el, el));

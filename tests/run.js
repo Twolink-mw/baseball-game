@@ -173,6 +173,27 @@ test('구속 기준 145/152/160, 체인지업은 모든 레벨에 있고 직구�
   for (const l of CONFIG.LEVELS) assert.ok(l.pitchMix['체인지업'] > 0, l.name + ' 체인지업 없음');
   assert.equal(CONFIG.PITCH_TYPES['체인지업'].speedDelta, -14);
 });
+test('투구 템포: 멈춤·동작이 레벨 범위 안, 릴리스 = 와인드업 시작 + 멈춤 + 동작, Lv.3은 템포 폭이 큼', () => {
+  CONFIG.LEVELS.forEach((level, i) => {
+    const p = createPitcher(level, createRng(700 + i));
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let k = 0; k < 500; k++) {
+      const x = p.nextPitch();
+      assert.ok(x.holdSec >= level.tempo.hold[0] && x.holdSec <= level.tempo.hold[1]);
+      assert.ok(x.motionSec >= level.tempo.motion[0] && x.motionSec <= level.tempo.motion[1]);
+      assert.ok(Math.abs(x.windupSec - (x.holdSec + x.motionSec)) < 1e-12);
+      lo = Math.min(lo, x.windupSec);
+      hi = Math.max(hi, x.windupSec);
+    }
+    if (i === 2) assert.ok(hi - lo > 1.2, 'Lv.3 템포 폭 ' + (hi - lo));
+  });
+  const g = createGame({ levelIndex: 2, pitchSeed: 3, judgeSeed: 4 });
+  runUntil(g, (x) => x.phase === 'PITCH_WINDUP');
+  const start = g.phaseStart;
+  runUntil(g, (x) => x.phase === 'PITCH_FLIGHT');
+  assert.ok(Math.abs(g.releaseTime - (start + g.pitch.windupSec)) < 1e-9);
+});
 CONFIG.LEVELS.forEach((level, i) => {
   test('D=1, ' + level.name, () => {
     const rng = createRng(200 + i);

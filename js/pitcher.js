@@ -53,12 +53,18 @@
         const type = rng.pickWeighted(level.pitchMix);
         const delta = C.PITCH_TYPES[type].speedDelta;
         const speed = Math.round(level.baseSpeed + delta + rng.range(-C.SPEED_JITTER, C.SPEED_JITTER));
+        // 투구 템포: 세트 자세에서 멈추는 시간 + 투구 동작 시간 (투구용 RNG라 챌린지에서도 기기마다 같음)
+        const holdSec = rng.range(level.tempo.hold[0], level.tempo.hold[1]);
+        const motionSec = rng.range(level.tempo.motion[0], level.tempo.motion[1]);
         return {
           cell: indexCell(idx),
           type,
           speed,
           flightSec: flightForSpeed(speed, C),
           revealSec: level.revealSec,
+          holdSec,
+          motionSec,
+          windupSec: holdSec + motionSec, // 와인드업 시작 → 릴리스
         };
       },
       recordUserClick(cell) {

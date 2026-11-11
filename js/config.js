@@ -13,7 +13,6 @@
 
     // 시간(초)
     AT_BAT_INTRO_SEC: 0.8,
-    WINDUP_SEC: 1.0,
     GRACE_SEC: 0.15, // 공 도착 후 입력 유예
     RESULT_SEC: 1.0, // 타석이 계속될 때 결과 연출
     AT_BAT_END_SEC: 2.2, // 타석 종료 결과 연출 (피드백: 타자 교체가 빨라 1.2 → 2.2)
@@ -39,18 +38,22 @@
     LEVELS: [
       {
         id: 1, name: 'Lv.1', title: '기교파', baseSpeed: 145, revealSec: 0.6,
+        // 투구 템포(초): 세트 자세 멈춤 + 투구 동작. 둘 다 범위 안에서 투구마다 랜덤
+        tempo: { hold: [0.1, 0.4], motion: [0.9, 0.9] }, // 거의 일정한 리듬
         pitchMix: { '직구': 55, '투심': 25, '체인지업': 20 },
         ai: 'random',
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
         id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
+        tempo: { hold: [0, 0.8], motion: [0.7, 0.9] }, // 가끔 길게 멈춤
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
         id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
+        tempo: { hold: [0, 1.2], motion: [0.55, 0.9] }, // 퀵 모션과 긴 멈춤이 섞임
         pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
         adjacent: { FOUL: 20, OUT_BIP: 30, SWING_MISS: 50 },

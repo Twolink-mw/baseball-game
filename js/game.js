@@ -168,7 +168,7 @@
       g.totalPitches++;
       g.click = null;
       g.windupStart = at;
-      g.releaseTime = at + C.WINDUP_SEC;
+      g.releaseTime = at + g.pitch.windupSec;
       g.arrivalTime = g.releaseTime + g.pitch.flightSec;
       enter('PITCH_WINDUP', at);
       g.events.push({ type: 'windup' });
