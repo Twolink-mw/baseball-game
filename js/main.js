@@ -147,6 +147,7 @@
     if (mode === 'normal') app.lastLevel = levelIndex;
     app.screen = 'game';
     app.lastFrameTs = null;
+    audio.setAmbience(true);
   }
 
   function finishGame() {
@@ -166,16 +167,20 @@
     );
     app.game = null;
     app.screen = 'result';
-    audio.fanfare(applied.newRecord || applied.unlockedLevel !== null);
+    audio.setAmbience(false);
+    audio.fanfare(applied.newRecord || applied.unlockedLevel !== null, summary.avg);
   }
 
   function goTitle() {
+    audio.setAmbience(false);
     app.game = null;
     app.screen = 'title';
   }
 
   function setPaused(p) {
-    if (app.game) app.game.setPaused(p);
+    if (!app.game) return;
+    app.game.setPaused(p);
+    audio.setAmbience(!p);
   }
 
   // event.timeStamp → 게임 시각. 마지막 프레임 이후 경과분만큼 보정한다.

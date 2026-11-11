@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>효과음 확인</title>
+    <style>
+      :root {
+        --bg: #0f1c30;
+        --card: #182a45;
+        --line: rgba(255, 255, 255, 0.25);
+        --text: #fff;
+        --sub: #9ab;
+        --accent: #2f7de1;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 4px;
+      }
+      p {
+        color: var(--sub);
+        margin: 0 0 16px;
+        font-size: 14px;
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      h2 {
+        font-size: 16px;
+        margin: 0 0 10px;
+        color: #ffd34d;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        min-height: 44px;
+        padding: 0 14px;
+        font: inherit;
+        font-size: 15px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: #1e3254;
+        color: var(--text);
+        cursor: pointer;
+      }
+      button.on {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>효과음 확인 (개발용)</h1>
+    <p>게임 효과음을 하나씩 들어보는 페이지입니다. 값은 js/config.js의 AUDIO와 js/audio.js에서 조정합니다.</p>
+
+    <section>
+      <h2>타격음 (나무 배트)</h2>
+      <div class="row">
+        <button data-play="bat" data-opts='{"clean":1,"power":1}'>홈런 (정타·최대)</button>
+        <button data-play="bat" data-opts='{"clean":1,"power":0.7}'>2루타 (정타)</button>
+        <button data-play="bat" data-opts='{"clean":1,"power":0.5}'>안타 (정타)</button>
+        <button data-play="bat" data-opts='{"clean":0.65,"power":0.5}'>안타 (좋음)</button>
+        <button data-play="bat" data-opts='{"clean":0.4,"power":0.35}'>범타 (빗맞음)</button>
+        <button data-play="bat" data-opts='{"clean":0.25,"power":0.3}'>파울</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>투구·스윙·미트</h2>
+      <div class="row">
+        <button data-play="pitch">투구 (공 가르는 소리)</button>
+        <button data-play="swing">스윙</button>
+        <button data-play="mitt" data-opts='{"speed":131}'>미트 131km</button>
+        <button data-play="mitt" data-opts='{"speed":145}'>미트 145km</button>
+        <button data-play="mitt" data-opts='{"speed":160}'>미트 160km</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>관중</h2>
+      <div class="row">
+        <button id="amb">배경 웅성거림 켜기</button>
+        <button data-play="cheer" data-opts='{"intensity":0.55,"dur":1.4}'>안타 환호</button>
+        <button data-play="cheer" data-opts='{"intensity":0.75,"dur":2}'>2루타 환호</button>
+        <button data-play="cheer" data-opts='{"intensity":1,"dur":3.2}'>홈런 함성</button>
+        <button data-play="ooh" data-opts='{"intensity":0.35}'>파울 "오~"</button>
+        <button data-play="groan" data-opts='{"intensity":0.4}'>범타 "아~"</button>
+        <button data-play="groan" data-opts='{"intensity":0.7}'>삼진 "아~"</button>
+        <button data-play="applause" data-opts='{"level":0.3,"dur":2.5}'>박수 (작게)</button>
+        <button data-play="applause" data-opts='{"level":1,"dur":3}'>박수 (크게)</button>
+        <button data-play="organ">구장 오르간</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>실제 장면처럼 이어서</h2>
+      <div class="row">
+        <button data-scene="homerun">홈런</button>
+        <button data-scene="single">안타</button>
+        <button data-scene="foul">파울</button>
+        <button data-scene="strikeout">헛스윙 삼진</button>
+        <button data-scene="looking">루킹 (미트)</button>
+      </div>
+    </section>
+
+    <script src="../js/config.js"></script>
+    <script src="../js/rng.js"></script>
+    <script src="../js/audio.js"></script>
+    <script>
+      (function () {
+        'use strict';
+        const audio = BB.createAudio();
+        const fakeLast = (result, extra) =>
+          Object.assign({ result, timing: 'PERFECT', pitch: { speed: 152 }, atBatOutcome: null, foulCapped: false }, extra);
+        // 투구 → (스윙) → 결과. 시간 간격은 게임과 비슷하게
+        const SCENES = {
+          homerun: [['pitch', 0], ['swing', 0.75], ['result', 0.8, fakeLast('HOMERUN')]],
+          single: [['pitch', 0], ['swing', 0.75], ['result', 0.8, fakeLast('SINGLE', { timing: 'GOOD' })]],
+          foul: [['pitch', 0], ['swing', 0.75], ['result', 0.8, fakeLast('FOUL', { timing: 'BAD' })]],
+          strikeout: [['pitch', 0], ['swing', 0.6], ['result', 0.84, fakeLast('SWING_MISS', { timing: 'BAD', atBatOutcome: 'STRIKEOUT' })]],
+          looking: [['pitch', 0], ['result', 0.84, fakeLast('LOOKING', { timing: 'NONE' })]],
+        };
+        document.addEventListener('click', (e) => {
+          const b = e.target.closest('button');
+          if (!b) return;
+          audio.unlock();
+          if (b.dataset.play) audio.play(b.dataset.play, b.dataset.opts ? JSON.parse(b.dataset.opts) : {});
+          if (b.dataset.scene) {
+            for (const [type, at, last] of SCENES[b.dataset.scene]) {
+              setTimeout(() => audio.onGameEvent(type === 'result' ? { type, last } : { type: type === 'pitch' ? 'release' : 'swing' }), at * 1000);
+            }
+          }
+        });
+        let ambOn = false;
+        document.getElementById('amb').addEventListener('click', (e) => {
+          ambOn = !ambOn;
+          audio.setAmbience(ambOn);
+          e.target.textContent = ambOn ? '배경 웅성거림 끄기' : '배경 웅성거림 켜기';
+          e.target.classList.toggle('on', ambOn);
+        });
+      })();
+    </script>
+  </body>
+</html>
