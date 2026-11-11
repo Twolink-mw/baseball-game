@@ -173,22 +173,6 @@ test('구속 기준 145/152/160, 체인지업은 모든 레벨에 있고 직구�
   for (const l of CONFIG.LEVELS) assert.ok(l.pitchMix['체인지업'] > 0, l.name + ' 체인지업 없음');
   assert.equal(CONFIG.PITCH_TYPES['체인지업'].speedDelta, -14);
 });
-test('구종 구속 차이 프리셋(mlb): 적용 시 슬라이더 -14, 커브 -24, 없는 이름은 무시', () => {
-  const { applySpeedGap } = require('../js/config.js');
-  const cfg = JSON.parse(JSON.stringify(CONFIG));
-  assert.equal(applySpeedGap(cfg, 'nope'), false);
-  assert.equal(cfg.PITCH_TYPES['슬라이더'].speedDelta, -10);
-  assert.equal(applySpeedGap(cfg, 'mlb'), true);
-  assert.equal(cfg.PITCH_TYPES['슬라이더'].speedDelta, -14);
-  assert.equal(cfg.PITCH_TYPES['커브'].speedDelta, -24);
-  assert.equal(CONFIG.PITCH_TYPES['커브'].speedDelta, -20, '원본 설정은 그대로');
-  // 적용한 설정으로 던진 공도 구속 범위 안
-  const p = createPitcher(cfg.LEVELS[2], createRng(5), cfg);
-  for (let k = 0; k < 300; k++) {
-    const x = p.nextPitch();
-    assert.ok(Math.abs(x.speed - (160 + cfg.PITCH_TYPES[x.type].speedDelta)) <= cfg.SPEED_JITTER);
-  }
-});
 CONFIG.LEVELS.forEach((level, i) => {
   test('D=1, ' + level.name, () => {
     const rng = createRng(200 + i);

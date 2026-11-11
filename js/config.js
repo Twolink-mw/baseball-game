@@ -26,16 +26,13 @@
     SPEED_TO_FLIGHT: [[130, 1.5], [140, 1.2], [150, 0.9], [160, 0.6], [170, 0.3]],
 
     // 구종: 구속 보정(km/h, 직구 대비)과 공개 구간 휨(논리 px, 렌더러용)
+    // 구속 차이는 메이저리그 평균(슬라이더 -14, 커브 -24)과 비교 플레이 후 이 값으로 확정(더 어려움)
     PITCH_TYPES: {
       '직구': { speedDelta: 0, bend: { x: 0, y: 0 } },
       '투심': { speedDelta: -3, bend: { x: -16, y: 0 } },
       '슬라이더': { speedDelta: -10, bend: { x: 42, y: 6 } },
       '커브': { speedDelta: -20, bend: { x: 8, y: 56 } },
       '체인지업': { speedDelta: -14, bend: { x: -10, y: 16 } }, // 직구처럼 오다가 살짝 가라앉으며 바깥으로
-    },
-    // 구종 구속 차이 비교용 (테스트 후 결정). index.html?gap=mlb 로 열면 아래 값으로 바뀜
-    SPEED_GAP_PRESETS: {
-      mlb: { '투심': -3, '슬라이더': -14, '커브': -24, '체인지업': -14 }, // 메이저리그 평균 구속 차이
     },
 
     // 직구 기준 구속은 메이저리그 기준: 기교파 선발(90mph) / 리그 평균(94.5mph) / 정상급 마무리(99.5mph)
@@ -113,18 +110,7 @@
     LEADERBOARD_PAGE: 8, // 타자 기록 화면 한 페이지 인원
   };
 
-  // 구종 구속 차이 프리셋 적용 (비교 테스트용). 적용했으면 true
-  function applySpeedGap(config, name) {
-    const preset = config.SPEED_GAP_PRESETS[name];
-    if (!preset) return false;
-    for (const [type, delta] of Object.entries(preset)) {
-      if (config.PITCH_TYPES[type]) config.PITCH_TYPES[type].speedDelta = delta;
-    }
-    config.speedGap = name;
-    return true;
-  }
-
-  const api = { CONFIG, applySpeedGap };
+  const api = { CONFIG };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);

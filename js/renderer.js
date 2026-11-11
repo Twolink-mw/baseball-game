@@ -590,10 +590,6 @@
       hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
 
       text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기', 640, 600, 16, '#bcd', 'center');
-      if (C.speedGap) {
-        const d = C.PITCH_TYPES;
-        text('비교 모드(' + C.speedGap + '): 구종 구속 차이 투심 ' + d['투심'].speedDelta + ' · 슬라이더 ' + d['슬라이더'].speedDelta + ' · 커브 ' + d['커브'].speedDelta + ' · 체인지업 ' + d['체인지업'].speedDelta + 'km', 640, 628, 16, '#ff9f5a', 'center', 'bold');
-      }
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
       muteButton(view, L.width - 150, 16, 130, 44);
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
