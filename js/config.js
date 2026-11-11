@@ -16,7 +16,7 @@
     WINDUP_SEC: 1.0,
     GRACE_SEC: 0.15, // 공 도착 후 입력 유예
     RESULT_SEC: 1.0, // 타석이 계속될 때 결과 연출
-    AT_BAT_END_SEC: 1.2, // 타석 종료 결과 연출
+    AT_BAT_END_SEC: 2.2, // 타석 종료 결과 연출 (피드백: 타자 교체가 빨라 1.2 → 2.2)
     MAX_DT: 0.05, // update(dt) 상한
 
     // 구속
