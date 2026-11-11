@@ -50,6 +50,7 @@
       stats: { hits: 0, singles: 0, doubles: 0, homers: 0, strikeouts: 0, outs: 0, perfects: 0 },
       atBatLog: [], // 타석별 결과
       pitchLog: [], // 던진 투구 순서
+      history: [], // 투구별 결과 { atBat, n, type, speed, cell, clickCell, result, timing } (투구 기록 패널용)
       pitch: null,
       windupStart: 0,
       releaseTime: 0,
@@ -182,6 +183,10 @@
         clickCell: click ? click.cell : null,
         deltaSec: click ? click.deltaSec : null,
         pitch: g.pitch,
+      });
+      g.history.push({
+        atBat: g.atBat, n: g.pitchInAtBat, type: g.pitch.type, speed: g.pitch.speed, cell: g.pitch.cell,
+        clickCell: g.last.clickCell, result: applied.result, timing: applied.timing,
       });
       enter('RESULT_SHOW', g.time);
       g.events.push({ type: 'result', last: g.last });

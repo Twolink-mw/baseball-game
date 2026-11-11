@@ -422,6 +422,80 @@
       S.drawScoreboard(ctx, 'BB 스타디움', g.playerName + ' · ' + BB.formatAvg(g.currentAverage()), flash, now);
     }
 
+    // ---- 투구 기록 패널 (화면 오른쪽) ----
+    const LOG_LABEL = { HOMERUN: '홈런', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹' };
+    const LOG_COLOR = { HOMERUN: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a' };
+
+    // 이번 타석 기록. 새 타석의 첫 공이 날아오기 전까지는 직전 타석을 보여준다
+    function pitchLogFor(g) {
+      const cur = g.history.filter((h) => h.atBat === g.atBat);
+      if (cur.length || g.atBat === 1 || (g.phase !== 'AT_BAT_INTRO' && g.phase !== 'PITCH_WINDUP')) {
+        return { title: '이번 타석', list: cur };
+      }
+      return { title: '직전 타석', list: g.history.filter((h) => h.atBat === g.atBat - 1) };
+    }
+
+    function drawPitchLog(g) {
+      const { title, list } = pitchLogFor(g);
+      const x = 1066;
+      const y = 150;
+      const w = 200;
+      const cs = 34; // 미니 존 칸 크기
+      const zx = x + (w - cs * 3) / 2;
+      const zy = y + 34;
+      const rowY = zy + cs * 3 + 14;
+      const h = rowY - y + Math.max(1, list.length) * 24 + 8;
+      roundRect(x, y, w, h, 12);
+      ctx.fillStyle = 'rgba(10,15,25,0.85)';
+      ctx.fill();
+      text(title, x + 12, y + 18, 15, '#9ab', 'left', 'bold');
+      // 미니 존: 공이 들어온 칸에 투구 번호
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(zx + cs * i, zy);
+        ctx.lineTo(zx + cs * i, zy + cs * 3);
+        ctx.moveTo(zx, zy + cs * i);
+        ctx.lineTo(zx + cs * 3, zy + cs * i);
+        ctx.stroke();
+      }
+      const center = (c) => ({ x: zx + cs * (c.col + 0.5), y: zy + cs * (c.row + 0.5) });
+      const last = list[list.length - 1];
+      if (last && last.clickCell) {
+        // 직전 투구에서 휘두른 칸
+        const p = center(last.clickCell);
+        ctx.strokeStyle = '#ffd34d';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x - cs / 2 + 2, p.y - cs / 2 + 2, cs - 4, cs - 4);
+      }
+      const perCell = {};
+      const OFFS = [[0, 0], [-8, -8], [8, 8], [8, -8], [-8, 8]];
+      list.forEach((e) => {
+        const k = e.cell.row * 3 + e.cell.col;
+        const o = OFFS[(perCell[k] = (perCell[k] || 0) + 1) - 1] || [0, 0];
+        const p = center(e.cell);
+        ctx.beginPath();
+        ctx.arc(p.x + o[0], p.y + o[1], 9, 0, Math.PI * 2);
+        ctx.fillStyle = LOG_COLOR[e.result];
+        ctx.fill();
+        text(String(e.n), p.x + o[0], p.y + o[1] + 1, 12, '#111', 'center', 'bold');
+      });
+      // 목록
+      if (!list.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 12, 14, '#789', 'center');
+      list.forEach((e, i) => {
+        const ry = rowY + i * 24 + 12;
+        ctx.beginPath();
+        ctx.arc(x + 18, ry, 9, 0, Math.PI * 2);
+        ctx.fillStyle = LOG_COLOR[e.result];
+        ctx.fill();
+        text(String(e.n), x + 18, ry + 1, 12, '#111', 'center', 'bold');
+        text(e.type, x + 34, ry, 14, '#fff', 'left', 'bold');
+        text(String(e.speed), x + 130, ry, 14, '#cde', 'right');
+        text(LOG_LABEL[e.result], x + w - 10, ry, 14, LOG_COLOR[e.result], 'right', 'bold');
+      });
+    }
+
     function drawBubble(g) {
       if (!g.pitch || (g.phase !== 'PITCH_FLIGHT' && g.phase !== 'RESULT_SHOW')) return;
       const s = g.pitchInAtBat + '구 ' + g.pitch.type + ' ' + g.pitch.speed + 'km/h';
@@ -509,6 +583,7 @@
       drawHitFx(g);
       ctx.restore();
       drawHud(g, view);
+      drawPitchLog(g);
       drawBubble(g);
       drawCenterMessage(g);
       muteButton(view, L.width - 410, L.height - 70, 120, 50);

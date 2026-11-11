@@ -288,6 +288,17 @@ test('일시정지 중에는 시간과 입력이 멈춤', () => {
   assert.equal(g.input({ row: 1, col: 1 }), true);
 });
 
+test('투구 기록: 투구마다 타석 번호·순번·구종·구속·코스·클릭·결과를 남김', () => {
+  const g = newGame(['SWING_MISS', 'FOUL', 'SINGLE', 'OUT_BIP']);
+  for (let i = 0; i < 4; i++) playPitch(g);
+  assert.deepEqual(g.history.map((h) => [h.atBat, h.n, h.result]), [[1, 1, 'SWING_MISS'], [1, 2, 'FOUL'], [1, 3, 'SINGLE'], [2, 1, 'OUT_BIP']]);
+  g.history.forEach((h, i) => {
+    assert.equal(h.type, g.pitchLog[i].type);
+    assert.equal(h.speed, g.pitchLog[i].speed);
+    assert.deepEqual(h.cell, g.pitchLog[i].cell);
+    assert.deepEqual(h.clickCell, { row: 1, col: 1 });
+  });
+});
 section('오늘의 챌린지');
 function pitchesOf(results, seeds) {
   const g = createGame(Object.assign({ levelIndex: CONFIG.CHALLENGE.level - 1, mode: 'challenge', judgeFn: scriptedJudge(results) }, seeds));
