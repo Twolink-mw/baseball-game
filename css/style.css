@@ -121,6 +121,69 @@ body {
   display: none;
 }
 
+/* 높이가 낮은 화면(휴대폰 가로, 키보드가 올라온 상태): 위쪽에 붙이고 여백을 줄임 */
+@media (max-height: 500px) {
+  .dialog {
+    align-items: flex-start;
+    padding-top: calc(var(--sa-top) + 6px);
+  }
+
+  .dialog-box {
+    padding: 12px 16px;
+    max-height: calc(100dvh - 12px);
+  }
+
+  .dialog-box h2 {
+    margin-bottom: 8px;
+    font-size: 17px;
+  }
+
+  /* 이름 창: 키보드가 올라와도 보이도록 [이름 칸][우타][좌타]를 맨 위 한 줄에 */
+  #name-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: min(560px, calc(100vw - 24px));
+    padding: 8px 12px;
+  }
+
+  #name-form h2 {
+    display: none;
+  }
+
+  #name-form #name-input {
+    order: 1;
+    flex: 1 1 180px;
+    width: auto;
+    padding: 8px 10px;
+  }
+
+  #name-form .bats {
+    order: 2;
+    flex: 0 0 176px;
+    margin: 0;
+  }
+
+  #name-form .dialog-error {
+    order: 3;
+    flex-basis: 100%;
+    min-height: 0;
+    margin: 0;
+  }
+
+  #name-form .chips {
+    order: 4;
+    flex-basis: 100%;
+    margin: 0;
+  }
+
+  #name-form .dialog-actions {
+    order: 5;
+    flex-basis: 100%;
+  }
+}
+
 .dialog-box {
   width: min(420px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
@@ -215,7 +278,7 @@ body {
 .bats {
   display: flex;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .bats label {

@@ -37,6 +37,9 @@
     let hits = [];
     let bg = null; // 고정 배경 캐시(실제 픽셀 크기)
     let cssScale = 1; // 논리 1px이 화면에서 몇 CSS px인지
+    // 화면이 16:9보다 넓으면 캔버스를 넓히고 게임 내용(1280)은 가운데에 둔다. 배경만 양옆으로 이어 그림
+    let LW = L.width; // 캔버스 전체 논리 폭
+    let ox = 0; // 게임 내용의 왼쪽 여백(논리 px)
     let touch = false; // 터치 기기 배치(큰 버튼, 존 확대)
     let zoneScale = 1;
     let minTap = 0; // 버튼 최소 높이(논리 px)
@@ -63,26 +66,30 @@
       const sa = safeArea();
       const vw = Math.max(1, global.innerWidth - sa.left - sa.right);
       const vh = Math.max(1, global.innerHeight - sa.top - sa.bottom);
-      const s = Math.min(vw / L.width, vh / L.height);
-      const cssW = Math.max(1, Math.floor(L.width * s));
+      const prevLW = LW;
+      LW = Math.max(L.width, Math.min(L.width * L.maxWide, (L.height * vw) / vh));
+      ox = (LW - L.width) / 2;
+      S.setExtent(ox);
+      const s = Math.min(vw / LW, vh / L.height);
+      const cssW = Math.max(1, Math.floor(LW * s));
       const cssH = Math.max(1, Math.floor(L.height * s));
       dpr = Math.min(global.devicePixelRatio || 1, L.maxDpr);
       canvas.style.width = cssW + 'px';
       canvas.style.height = cssH + 'px';
       const w = Math.round(cssW * dpr);
       const h = Math.round(cssH * dpr);
-      if (canvas.width !== w || canvas.height !== h || !bg) {
+      if (canvas.width !== w || canvas.height !== h || !bg || LW !== prevLW) {
         canvas.width = w;
         canvas.height = h;
         bg = S.buildBackground(w, h);
       }
-      cssScale = cssW / L.width;
+      cssScale = cssW / LW;
       updateTouchLayout();
     }
 
     function toLogical(clientX, clientY) {
       const r = canvas.getBoundingClientRect();
-      return { x: ((clientX - r.left) / r.width) * L.width, y: ((clientY - r.top) / r.height) * L.height };
+      return { x: ((clientX - r.left) / r.width) * LW - ox, y: ((clientY - r.top) / r.height) * L.height };
     }
 
     function zoneRect() {
@@ -193,10 +200,10 @@
     // 구장 배경(하늘+캐시) + 덮개
     function drawBackdrop(now, shade) {
       S.drawSky(ctx, now);
-      if (bg) ctx.drawImage(bg, 0, 0, L.width, L.height);
+      if (bg) ctx.drawImage(bg, -ox, 0, LW, L.height);
       if (shade) {
         ctx.fillStyle = shade;
-        ctx.fillRect(0, 0, L.width, L.height);
+        ctx.fillRect(-ox, 0, LW, L.height);
       }
     }
 
@@ -665,7 +672,7 @@
       if (g.paused) {
         hits = [];
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(0, 0, L.width, L.height);
+        ctx.fillRect(-ox, 0, LW, L.height);
         drawPitchLog(g, logX); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
         text('일시정지', 640, 220, 56, '#fff', 'center', 'bold');
         button('resume', 640 - 210, 290, 200, 60, '계속하기', { primary: true });
@@ -867,8 +874,9 @@
 
     function draw(view) {
       hits = [];
-      ctx.setTransform(canvas.width / L.width, 0, 0, canvas.height / L.height, 0, 0);
-      ctx.clearRect(0, 0, L.width, L.height);
+      const k = canvas.width / LW;
+      ctx.setTransform(k, 0, 0, canvas.height / L.height, ox * k, 0);
+      ctx.clearRect(-ox, 0, LW, L.height);
       if (view.screen === 'title') drawTitle(view);
       else if (view.screen === 'game') drawGame(view);
       else if (view.screen === 'result') drawResult(view);

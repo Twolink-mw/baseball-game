@@ -91,8 +91,12 @@
       dialog.list.appendChild(b);
     }
     dialog.el.hidden = false;
-    dialog.input.focus();
-    dialog.input.select();
+    // 터치 기기에서는 키보드가 화면 대부분을 가리므로 바로 띄우지 않는다.
+    // (우타/좌타·기존 타자를 먼저 고르고, 이름 칸을 누르면 키보드 → '완료'로 확인)
+    if (!app.touch) {
+      dialog.input.focus();
+      dialog.input.select();
+    }
   }
 
   function closeNameDialog() {

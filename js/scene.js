@@ -8,6 +8,13 @@
   const L = C.LAYOUT;
   const V = L.view;
   const W = L.width;
+  // 배경을 그리는 가로 범위(게임 좌표). 화면이 16:9보다 넓으면 양옆으로 넓혀 그린다
+  let X0 = 0;
+  let X1 = W;
+  function setExtent(ox) {
+    X0 = -ox;
+    X1 = W + ox;
+  }
   const H = L.height;
 
   // 구장 좌표(피트) → 화면 좌표. 카메라 바로 앞(뒤)는 잘라서 화면 밖으로 보낸다.
@@ -47,9 +54,9 @@
     // 관중석: 가장자리가 높은 그릇 모양
     const topAt = (x) => 96 + 50 * Math.cos(((x - W / 2) / W) * Math.PI); // 가운데 146, 가장자리 96
     c.beginPath();
-    c.moveTo(0, fy);
-    for (let x = 0; x <= W; x += 20) c.lineTo(x, topAt(x));
-    c.lineTo(W, fy);
+    c.moveTo(X0, fy);
+    for (let x = X0; x <= X1 + 20; x += 20) c.lineTo(x, topAt(x));
+    c.lineTo(X1 + 20, fy);
     c.closePath();
     const st = c.createLinearGradient(0, 90, 0, fy);
     st.addColorStop(0, '#1b2438');
@@ -59,7 +66,7 @@
     // 관중(점)
     const crowd = ['#e8e2d0', '#c94f4f', '#3f6fb5', '#f0c04a', '#ffffff', '#6aa86a', '#2b2b2b', '#d98a4a'];
     for (let y = 104; y < fy - FENCE_H - 4; y += 5) {
-      for (let x = 2; x < W; x += 5) {
+      for (let x = X0 + 2; x < X1; x += 5) {
         if (y < topAt(x) + 6) continue;
         if (deco.next() < 0.18) continue;
         c.fillStyle = crowd[deco.int(crowd.length)];
@@ -72,9 +79,9 @@
     c.strokeStyle = 'rgba(0,0,0,0.35)';
     c.lineWidth = 3;
     c.beginPath();
-    for (let x = 0; x <= W; x += 20) {
+    for (let x = X0; x <= X1 + 20; x += 20) {
       const y = topAt(x) + (fy - topAt(x)) * 0.45;
-      if (x) c.lineTo(x, y);
+      if (x > X0) c.lineTo(x, y);
       else c.moveTo(x, y);
     }
     c.stroke();
@@ -82,14 +89,15 @@
     c.strokeStyle = '#c7ccd8';
     c.lineWidth = 3;
     c.beginPath();
-    for (let x = 0; x <= W; x += 20) {
-      if (x) c.lineTo(x, topAt(x));
+    for (let x = X0; x <= X1 + 20; x += 20) {
+      if (x > X0) c.lineTo(x, topAt(x));
       else c.moveTo(x, topAt(x));
     }
     c.stroke();
 
     // 조명탑
-    for (const tx of [96, 420, 1184]) drawLightTower(c, tx, topAt(tx));
+    // 넓은 화면이면 양옆 조명탑도 보임
+    for (const tx of [-330, 96, 420, 1184, 1610]) if (tx > X0 - 80 && tx < X1 + 80) drawLightTower(c, tx, topAt(tx));
 
     // 전광판(틀). 글자는 매 프레임 drawScoreboard에서 그림
     const sb = SCOREBOARD;
@@ -106,14 +114,17 @@
 
     // 외야 펜스 + 가상의 광고판
     c.fillStyle = '#1c5537';
-    c.fillRect(0, fy - FENCE_H, W, FENCE_H);
+    c.fillRect(X0, fy - FENCE_H, X1 - X0, FENCE_H);
     const ads = [
       ['BB 스포츠', '#d9442b', '#fff'], ['홈런 음료', '#f2c230', '#222'], ['야구 교실', '#2f7de1', '#fff'],
       ['배트 공방', '#ffffff', '#1c5537'], ['구장 분식', '#e07a2e', '#fff'], ['스윙 체육관', '#7a4fc2', '#fff'],
     ];
     const aw = 150;
-    for (let i = 0, x = 20; x < W; i++, x += aw + 24) {
-      const [label, bg, fg] = ads[i % ads.length];
+    // 광고판은 원래 위치(20부터 174 간격)를 유지한 채 왼쪽으로도 이어 붙임
+    const step = aw + 24;
+    const firstI = Math.floor((X0 - 20) / step);
+    for (let i = firstI, x = 20 + firstI * step; x < X1; i++, x += step) {
+      const [label, bg, fg] = ads[((i % ads.length) + ads.length) % ads.length];
       c.fillStyle = bg;
       c.fillRect(x, fy - FENCE_H + 4, aw, FENCE_H - 8);
       c.fillStyle = fg;
@@ -123,7 +134,7 @@
       c.fillText(label, x + aw / 2, fy - FENCE_H / 2);
     }
     c.fillStyle = '#f2c230'; // 펜스 위 노란 선
-    c.fillRect(0, fy - FENCE_H - 2, W, 3);
+    c.fillRect(X0, fy - FENCE_H - 2, X1 - X0, 3);
 
     // 잔디
     const gy = fy;
@@ -131,7 +142,7 @@
     grass.addColorStop(0, '#2a7a3e');
     grass.addColorStop(1, '#358f48');
     c.fillStyle = grass;
-    c.fillRect(0, gy, W, H - gy);
+    c.fillRect(X0, gy, X1 - X0, H - gy);
     // 깎은 자국(체크무늬): 깊이 방향 띠 + 좌우 방향 띠
     c.fillStyle = 'rgba(255,255,255,0.05)';
     for (let z = 0; z < FENCE_Z; z += 30) polyField(c, [[-400, z], [400, z], [400, z + 15], [-400, z + 15]]), c.fill();
@@ -191,11 +202,11 @@
     c.fill();
 
     // 가장자리 어둡게
-    const vg = c.createRadialGradient(W / 2, H * 0.55, H * 0.4, W / 2, H * 0.55, W * 0.75);
+    const vg = c.createRadialGradient(W / 2, H * 0.55, H * 0.4, W / 2, H * 0.55, (X1 - X0) * 0.6);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(0,0,0,0.35)');
     c.fillStyle = vg;
-    c.fillRect(0, 0, W, H);
+    c.fillRect(X0, 0, X1 - X0, H);
   }
 
   function drawLightTower(c, x, baseY) {
@@ -222,12 +233,14 @@
   const SCOREBOARD = { x: 820, y: 58, w: 250, h: 74 };
 
   // 배경 캐시: 실제 픽셀 크기(w,h)로 한 번 그려 두고 매 프레임 drawImage
+  // w,h: 실제 픽셀 크기. 캐시는 X0~X1 전체 폭을 담는다
   function buildBackground(w, h) {
     const cv = document.createElement('canvas');
     cv.width = w;
     cv.height = h;
     const c = cv.getContext('2d');
-    c.setTransform(w / W, 0, 0, h / H, 0, 0);
+    const lw = X1 - X0;
+    c.setTransform(w / lw, 0, 0, h / H, (-X0 * w) / lw, 0);
     paintStatic(c);
     return cv;
   }
@@ -239,13 +252,13 @@
     sky.addColorStop(0.7, '#8fc0e6');
     sky.addColorStop(1, '#d2e8f6');
     c.fillStyle = sky;
-    c.fillRect(0, 0, W, fenceY());
+    c.fillRect(X0, 0, X1 - X0, fenceY());
     // 구름: 정해진 모양이 천천히 흘러간다
     const clouds = [[80, 52, 1], [460, 30, 0.8], [760, 70, 1.2], [1100, 40, 0.9]];
     c.fillStyle = 'rgba(255,255,255,0.85)';
-    const span = W + 300;
+    const span = X1 - X0 + 300;
     for (const [x0, y, s] of clouds) {
-      const x = ((((x0 + nowSec * C.FX.cloudSpeed * s) % span) + span) % span) - 150;
+      const x = ((((x0 - X0 + nowSec * C.FX.cloudSpeed * s) % span) + span) % span) - 150 + X0;
       c.beginPath();
       c.ellipse(x, y, 46 * s, 14 * s, 0, 0, Math.PI * 2);
       c.ellipse(x - 28 * s, y + 4 * s, 26 * s, 10 * s, 0, 0, Math.PI * 2);
@@ -511,6 +524,6 @@
   }
 
   Object.assign(BB, {
-    scene: { project, buildBackground, drawSky, drawScoreboard, pitcherPose, drawPitcher, drawBatter, fenceY, SCOREBOARD },
+    scene: { project, setExtent, buildBackground, drawSky, drawScoreboard, pitcherPose, drawPitcher, drawBatter, fenceY, SCOREBOARD },
   });
 })(window);

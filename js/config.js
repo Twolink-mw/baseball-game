@@ -90,6 +90,7 @@
       ballR0: 3,
       ballR1: 14,
       maxDpr: 2,
+      maxWide: 1.45, // 화면이 넓으면 배경을 1280의 이 배수까지 넓힘 (20:9 휴대폰 ≈ 1.25)
       // 구장 원근 투영: 홈플레이트 기준 (x 좌우, z 투수 방향) 피트 → 화면
       view: { horizonY: 215, camDist: 14.74, focal: 1300, camHeight: 5.5 },
       pitcher: { x: 640, y: 312, scale: 1 }, // 발 위치

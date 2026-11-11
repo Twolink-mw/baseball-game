@@ -70,12 +70,12 @@
     <div id="name-dialog" class="dialog" hidden>
       <form id="name-form" class="dialog-box" autocomplete="off" novalidate>
         <h2>타자 이름</h2>
-        <input id="name-input" type="text" maxlength="8" placeholder="이름 (1~8자)" enterkeyhint="done" spellcheck="false" />
-        <p id="name-error" class="dialog-error" aria-live="polite"></p>
         <div class="bats" role="radiogroup" aria-label="타석">
           <label><input type="radio" name="bats" value="R" checked /><span>우타</span></label>
           <label><input type="radio" name="bats" value="L" /><span>좌타</span></label>
         </div>
+        <input id="name-input" type="text" maxlength="8" placeholder="이름 (1~8자)" enterkeyhint="done" spellcheck="false" />
+        <p id="name-error" class="dialog-error" aria-live="polite"></p>
         <div id="name-list" class="chips"></div>
         <div class="dialog-actions">
           <button type="button" id="name-cancel">취소</button>
