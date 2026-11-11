@@ -6,6 +6,7 @@
   const C = BB.CONFIG;
   const canvas = document.getElementById('game');
   const renderer = BB.createRenderer(canvas);
+  const audio = BB.createAudio();
 
   const app = {
     screen: 'title', // title | game | result | players
@@ -32,6 +33,18 @@
   function setRecord(r) {
     app.record = r;
     BB.storage.save(r);
+    audio.setMuted(r.settings.muted);
+  }
+
+  function toggleMute() {
+    const settings = Object.assign({}, app.record.settings, { muted: !app.record.settings.muted });
+    setRecord(Object.assign({}, app.record, { settings }));
+  }
+
+  // 브라우저 정책: 첫 사용자 입력 이후에 소리 시작 (iOS 포함)
+  audio.setMuted(app.record.settings.muted);
+  for (const type of ['pointerdown', 'keydown', 'touchend']) {
+    global.addEventListener(type, () => audio.unlock(), { capture: true, passive: true });
   }
 
   // ---- 타자 이름 대화상자 ----
@@ -147,9 +160,13 @@
       playerKey: key, levelIndex: g.levelIndex, hits: summary.hits, atBats: C.AT_BATS_PER_GAME, mode: g.mode, date,
     });
     setRecord(applied.record);
-    app.result = Object.assign({ summary, date, playerName: player.name, player: applied.record.players[key] }, applied);
+    app.result = Object.assign(
+      { summary, date, playerName: player.name, player: applied.record.players[key], shownAt: performance.now() / 1000 },
+      applied
+    );
     app.game = null;
     app.screen = 'result';
+    audio.fanfare(applied.newRecord || applied.unlockedLevel !== null);
   }
 
   function goTitle() {
@@ -213,6 +230,8 @@
       case 'reset':
         if (global.confirm('모든 타자의 기록과 잠금 해제 상태를 지울까요?')) setRecord(BB.storage.clear());
         return;
+      case 'mute':
+        return toggleMute();
       case 'pause':
         return setPaused(true);
       case 'resume':
@@ -245,6 +264,7 @@
       if (app.screen === 'game') swingAt(cell, ts);
     },
     onKey(code) {
+      if (code === 'KeyM') return toggleMute();
       if (app.screen === 'game') {
         if (code === 'Escape') setPaused(!app.game.paused);
         else if (app.game.paused) setPaused(false);
@@ -269,7 +289,7 @@
     app.lastFrameTs = ts;
     if (app.screen === 'game' && app.game) {
       app.game.update(dt);
-      app.game.drainEvents(); // M3에서 사운드에 연결
+      for (const e of app.game.drainEvents()) audio.onGameEvent(e);
       if (app.game.phase === 'GAME_OVER') finishGame();
     }
     const player = currentPlayer();

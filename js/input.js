@@ -46,7 +46,7 @@
         handlers.onCellKey(cell, e.timeStamp);
         return;
       }
-      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Escape') {
+      if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Escape' || e.code === 'KeyM') {
         e.preventDefault();
         handlers.onKey(e.code === 'NumpadEnter' ? 'Enter' : e.code);
       }

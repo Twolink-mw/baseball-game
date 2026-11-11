@@ -145,6 +145,18 @@
       if (!disabled) hits.push({ id, x, y, w, h });
     }
 
+    // 음소거 토글 (M 키로도 전환)
+    function muteButton(view, x, y, w, h) {
+      const muted = view.record && view.record.settings.muted;
+      button('mute', x, y, w, h, muted ? '소리 끔' : '소리 켬', { size: 18 });
+      if (muted) {
+        ctx.strokeStyle = '#ff8a8a';
+        ctx.lineWidth = 2;
+        roundRect(x, y, w, h, 10);
+        ctx.stroke();
+      }
+    }
+
     // 구장 배경(하늘+캐시) + 덮개
     function drawBackdrop(now, shade) {
       S.drawSky(ctx, now);
@@ -499,6 +511,7 @@
       drawHud(g, view);
       drawBubble(g);
       drawCenterMessage(g);
+      muteButton(view, L.width - 410, L.height - 70, 120, 50);
       button('pause', L.width - 280, L.height - 70, 120, 50, '일시정지', { size: 20 });
       button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
       if (g.paused) {
@@ -576,8 +589,9 @@
       text(d, 640, cy + 76, 18, '#eee', 'center');
       hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
 
-      text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C', 640, 600, 16, '#bcd', 'center');
+      text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기', 640, 600, 16, '#bcd', 'center');
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
+      muteButton(view, L.width - 150, 16, 130, 44);
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
     }
 
@@ -633,8 +647,12 @@
       drawBackdrop(view.now, 'rgba(8,14,26,0.84)');
       const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
       text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
+      const e = view.now - (r.shownAt || 0); // 결과 화면에 들어온 뒤 경과(초)
       text('이번 타율', 640, 118, 24, '#aaa', 'center');
-      text(BB.formatAvg(s.avg), 640, 196, 104, '#ffd34d', 'center', 'bold');
+      // 안타 수를 하나씩 세며 타율이 올라감
+      const k = clamp01(e / 0.7);
+      const shownHits = Math.round((1 - (1 - k) * (1 - k)) * s.hits);
+      text(BB.formatAvg(shownHits / C.AT_BATS_PER_GAME), 640, 196, 104, '#ffd34d', 'center', 'bold');
       let y = 280;
       const avgOr = (x) => (x === null ? '-' : BB.formatAvg(x));
       if (s.mode === 'normal') {
@@ -643,12 +661,23 @@
         text('챌린지는 통산 타율에 반영되지 않습니다', 640, y, 20, '#9ab', 'center');
       }
       y += 50;
+      // 기록 갱신·레벨 해제: 타율이 다 올라간 뒤 차례로 튀어나오고 깜빡임
+      const badge = (str, color, t0) => {
+        if (e < t0) return;
+        const sc = Math.max(0.01, popScale(e - t0));
+        ctx.save();
+        ctx.translate(640, y);
+        ctx.scale(sc, sc);
+        ctx.globalAlpha = 0.8 + 0.2 * Math.sin((e - t0) * 6);
+        outlined(str, 0, 0, 36, color);
+        ctx.restore();
+      };
       if (r.newRecord) {
-        text('NEW RECORD', 640, y, 34, '#ff6b6b', 'center', 'bold');
+        badge('NEW RECORD', '#ff6b6b', 0.8);
         y += 46;
       }
       if (r.unlockedLevel !== null) {
-        text(C.LEVELS[r.unlockedLevel].name + ' 해제!', 640, y, 34, '#7cf29a', 'center', 'bold');
+        badge(C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a', r.newRecord ? 1.1 : 0.8);
         y += 46;
       }
       const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + ' · 홈런 ' + s.homers + ')';

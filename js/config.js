@@ -38,7 +38,7 @@
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', baseSpeed: 150, flightSec: 0.9, revealSec: 0.42,
+        id: 2, name: 'Lv.2', baseSpeed: 150, flightSec: 0.9, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
         pitchMix: { '직구': 50, '투심': 20, '슬라이더': 30 },
         ai: 'weak',
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
@@ -86,6 +86,9 @@
       pitcher: { x: 640, y: 312, scale: 1 }, // 발 위치
       batter: { x: 925, y: 708 }, // 발 사이 중앙
     },
+
+    // 효과음
+    AUDIO: { volume: 0.6 },
 
     // 연출(초)
     FX: {
