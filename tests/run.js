@@ -865,5 +865,22 @@ test('아이콘 PNG: 서명·크기·CRC가 올바름', () => {
   }
 });
 
+section('문법 검사');
+test('브라우저용 js 파일이 모두 문법 오류 없이 읽힘 (main.js 등 DOM 파일 포함)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const dir = path.join(__dirname, '..', 'js');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js')).map((f) => path.join(dir, f));
+  files.push(path.join(__dirname, '..', 'sw.js'));
+  for (const f of files) {
+    try {
+      new vm.Script(fs.readFileSync(f, 'utf8'), { filename: f });
+    } catch (e) {
+      throw new Error(path.basename(f) + ': ' + e.message);
+    }
+  }
+});
+
 console.log(`\n${passed} 통과, ${failed} 실패`);
 process.exitCode = failed ? 1 : 0;

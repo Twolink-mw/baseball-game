@@ -245,10 +245,8 @@
     if (s.mode === 'challenge') {
       // 타석별 결과 격자: 같은 날 같은 공을 상대했으니 타석끼리 비교할 수 있다
       const EMOJI = { HOMERUN: '🟥', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
-      msg += '
-' + s.atBatLog.map((o) => EMOJI[o] || '⬜').join('');
-      msg += '
-미션 ' + s.mission.text + (s.missionDone ? ' 달성!' : ' 실패');
+      msg += '\n' + s.atBatLog.map((o) => EMOJI[o] || '⬜').join('');
+      msg += '\n미션 ' + s.mission.text + (s.missionDone ? ' 달성!' : ' 실패');
     }
     const filename = 'bbgame-' + r.date + '-' + r.playerName + '.png';
     card.toBlob((blob) => {
