@@ -18,6 +18,7 @@
     OUT_BIP: '범타 아웃',
     SWING_MISS: '헛스윙',
     LOOKING: '루킹 스트라이크',
+    BALL: '볼',
   };
   const HITS = { HOMERUN: 1, DOUBLE: 1, SINGLE: 1 };
   const BOARD_FLASH = { HOMERUN: 'HOME RUN!', DOUBLE: '2루타!', SINGLE: 'HIT!' };
@@ -487,9 +488,12 @@
       text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
       text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18);
       text('타율 ' + BB.formatAvg(g.currentAverage()), 32, 154, 18);
-      text('S', 32, 186, 18, '#fff', 'left', 'bold');
-      for (let i = 0; i < C.MAX_STRIKES - 1; i++) lamp(60 + i * 26, 186, i < g.strikes, '#f2c230');
-      text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 186, 16, '#ccc', 'right');
+      text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 154, 16, '#ccc', 'right');
+      // 볼 카운트(초록) · 스트라이크(노랑)
+      text('B', 32, 186, 18, '#fff', 'left', 'bold');
+      for (let i = 0; i < C.MAX_BALLS; i++) lamp(60 + i * 26, 186, i < g.balls, '#4fd27a');
+      text('S', 150, 186, 18, '#fff', 'left', 'bold');
+      for (let i = 0; i < C.MAX_STRIKES - 1; i++) lamp(178 + i * 26, 186, i < g.strikes, '#f2c230');
     }
 
     function drawBoard(g, now) {
@@ -498,8 +502,8 @@
     }
 
     // ---- 투구 기록 패널 (화면 오른쪽) ----
-    const LOG_LABEL = { HOMERUN: '홈런', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹' };
-    const LOG_COLOR = { HOMERUN: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a' };
+    const LOG_LABEL = { HOMERUN: '홈런', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹', BALL: '볼' };
+    const LOG_COLOR = { HOMERUN: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a', BALL: '#4fd27a' };
 
     // 타석 결과 한마디 (직전 타석 제목용)
     function atBatOutcomeLabel(list) {
@@ -538,8 +542,8 @@
       const bottom = onLeft ? 708 : 640; // 오른쪽은 아래 버튼 위까지
       const cs = 40; // 미니 존 칸 크기
       const zx = x + (w - cs * 3) / 2;
-      const zy = y + 40;
-      const rowY = zy + cs * 3 + 14;
+      const zy = y + 62; // 존 위·아래로 볼 자리(반 칸)를 남김
+      const rowY = zy + cs * 3 + 36;
       const CUR_H = 30;
       const PREV_H = 26;
       // 줄 수가 넘치면 직전 타석은 마지막 몇 줄만
@@ -566,6 +570,8 @@
       }
       const center = (c) => ({ x: zx + cs * (c.col + 0.5), y: zy + cs * (c.row + 0.5) });
       const last = cur[cur.length - 1];
+      // 이번 타석 볼/스트라이크 카운트
+      text('B ' + g.balls + '  S ' + g.strikes, x + w - 16, y + 22, 18, '#dfe6ee', 'right', 'bold');
       if (last && last.clickCell) {
         // 직전 투구에서 휘두른 칸
         const p = center(last.clickCell);

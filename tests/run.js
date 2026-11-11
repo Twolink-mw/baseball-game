@@ -78,11 +78,12 @@ test('3스트라이크(헛스윙+루킹 포함) → 삼진, 타석 종료', () =
   assert.equal(g.strikes, 0);
 });
 
-test('미클릭이면 루킹 판정(실제 판정 함수)', () => {
+test('미클릭이면 스트라이크는 루킹, 볼은 볼 (실제 판정 함수)', () => {
   const g = createGame({ levelIndex: 0, pitchSeed: 3, judgeSeed: 4 });
   runUntil(g, (x) => x.phase === 'RESULT_SHOW');
-  assert.equal(g.last.result, 'LOOKING');
-  assert.equal(g.strikes, 1);
+  assert.equal(g.last.result, g.pitch.ball ? 'BALL' : 'LOOKING');
+  assert.equal(g.strikes, g.pitch.ball ? 0 : 1);
+  assert.equal(g.balls, g.pitch.ball ? 1 : 0);
 });
 
 for (const r of ['SINGLE', 'DOUBLE', 'HOMERUN', 'OUT_BIP']) {
@@ -108,13 +109,46 @@ test('타석 투구수 12 이상에서 파울 → 범타로 타석 종료', () =
   assert.equal(g.totalPitches, 12);
 });
 
-test('9타석 → GAME_OVER, 타율 = 안타÷9 (홈런·2루타 포함)', () => {
-  const g = newGame(['SINGLE', 'DOUBLE', 'HOMERUN', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP']);
+test('10타석 → GAME_OVER, 타율 = 안타÷10 (홈런·2루타 포함)', () => {
+  assert.equal(CONFIG.AT_BATS_PER_GAME, 10);
+  const g = newGame(['SINGLE', 'DOUBLE', 'HOMERUN', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP']);
   for (let i = 0; i < 9; i++) playPitch(g);
+  assert.notEqual(g.phase, 'GAME_OVER');
+  playPitch(g);
   assert.equal(g.phase, 'GAME_OVER');
   assert.equal(g.stats.hits, 3);
-  assert.equal(g.finalAverage(), 3 / 9);
-  assert.equal(formatAvg(g.finalAverage()), '.333');
+  assert.equal(g.finalAverage(), 3 / 10);
+  assert.equal(formatAvg(g.finalAverage()), '.300');
+});
+
+test('볼: B 증가, 타석은 계속, 다음 타석에서 B=0', () => {
+  const g = newGame(['BALL', 'BALL', 'SWING_MISS', 'SINGLE', 'LOOKING']);
+  playPitch(g);
+  playPitch(g);
+  assert.equal(g.balls, 2);
+  assert.equal(g.atBat, 1);
+  playPitch(g);
+  assert.deepEqual([g.balls, g.strikes], [2, 1]);
+  playPitch(g); // 안타 → 다음 타석
+  assert.deepEqual([g.atBat, g.balls, g.strikes], [2, 0, 0]);
+});
+
+test('볼 3개 이후에는 스트라이크만 (볼넷 없음)', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const g = createGame({ levelIndex: 2, pitchSeed: seed, judgeSeed: seed + 1 });
+    let pitches = 0;
+    while (g.phase !== 'GAME_OVER' && pitches < 400) {
+      runUntil(g, (x) => x.phase === 'PITCH_FLIGHT' || x.phase === 'GAME_OVER');
+      if (g.phase === 'GAME_OVER') break;
+      if (g.balls >= CONFIG.MAX_BALLS) assert.equal(g.pitch.ball, false, '볼 3개 뒤 볼');
+      pitches++;
+      runUntil(g, (x) => x.phase === 'RESULT_SHOW'); // 스윙 안 함 → 볼 또는 루킹
+      assert.ok(g.balls <= CONFIG.MAX_BALLS);
+      runUntil(g, (x) => x.phase !== 'RESULT_SHOW');
+    }
+    assert.equal(g.phase, 'GAME_OVER');
+    assert.equal(g.stats.strikeouts, CONFIG.AT_BATS_PER_GAME, '안 치면 모두 삼진');
+  }
 });
 
 test('타율 표시 반올림', () => {
@@ -208,6 +242,17 @@ test('D≥2 → 항상 헛스윙, 클릭 없음 → 루킹', () => {
   assert.equal(judge(null, P, CONFIG.LEVELS[0], rng).result, 'LOOKING');
   assert.equal(judge({ cell: P, deltaSec: 0.2 }, P, CONFIG.LEVELS[0], rng).result, 'LOOKING');
 });
+test('볼: 안 치면 BALL, 볼 옆 칸(D=1)은 인접 판정, 먼 칸은 헛스윙', () => {
+  const rng = createRng(6);
+  const level = CONFIG.LEVELS[0];
+  const B = { row: -1, col: 1 }; // 존 바로 위
+  assert.equal(judge(null, B, level, rng).result, 'BALL');
+  assert.equal(judge({ cell: { row: 0, col: 1 }, deltaSec: 0.2 }, B, level, rng).result, 'BALL');
+  for (let i = 0; i < 300; i++) {
+    assert.ok(Object.keys(level.adjacent).includes(judge({ cell: { row: 0, col: 1 }, deltaSec: 0 }, B, level, rng).result));
+    assert.equal(judge({ cell: { row: 2, col: 1 }, deltaSec: 0 }, B, level, rng).result, 'SWING_MISS');
+  }
+});
 
 section('투수 AI');
 test('구속표: 같은 구속이면 레벨과 관계없이 같은 비행 시간, 느릴수록 오래 걸림', () => {
@@ -243,8 +288,28 @@ test('random: 9칸 모두 대략 균등', () => {
   const p = createPitcher(CONFIG.LEVELS[0], createRng(7));
   const counts = new Array(9).fill(0);
   const N = 18000;
-  for (let k = 0; k < N; k++) counts[cellIndex(p.nextPitch().cell)]++;
+  for (let k = 0; k < N; k++) counts[cellIndex(p.nextPitch({ allowBall: false }).cell)]++;
   for (const c of counts) assert.ok(Math.abs(c / N - 1 / 9) < 0.015);
+});
+
+test('볼 비율은 레벨 ballRate, 볼은 존 바로 바깥 칸, allowBall=false면 볼 없음', () => {
+  CONFIG.LEVELS.forEach((level, i) => {
+    const p = createPitcher(level, createRng(800 + i));
+    const N = 10000;
+    let balls = 0;
+    for (let k = 0; k < N; k++) {
+      const x = p.nextPitch();
+      const out = x.cell.row < 0 || x.cell.row > 2 || x.cell.col < 0 || x.cell.col > 2;
+      assert.equal(out, x.ball);
+      if (x.ball) {
+        balls++;
+        assert.ok(x.cell.row >= -1 && x.cell.row <= 3 && x.cell.col >= -1 && x.cell.col <= 3);
+        assert.ok((x.cell.row >= 0 && x.cell.row <= 2) || (x.cell.col >= 0 && x.cell.col <= 2), '대각선 모서리 바깥');
+      }
+    }
+    assert.ok(Math.abs(balls / N - level.ballRate) < 0.02, level.name + ' 볼 비율 ' + balls / N);
+    for (let k = 0; k < 500; k++) assert.equal(p.nextPitch({ allowBall: false }).ball, false);
+  });
 });
 
 test('adaptive: 클릭이 몰린 칸을 덜 던짐', () => {
@@ -252,7 +317,7 @@ test('adaptive: 클릭이 몰린 칸을 덜 던짐', () => {
   const counts = new Array(9).fill(0);
   const N = 9000;
   for (let k = 0; k < N; k++) {
-    counts[cellIndex(p.nextPitch().cell)]++;
+    counts[cellIndex(p.nextPitch({ allowBall: false }).cell)]++;
     p.recordUserClick({ row: 1, col: 1 }); // 항상 가운데 클릭
   }
   const center = counts[4] / N;
@@ -328,14 +393,14 @@ function pitchesOf(results, seeds) {
 }
 test('같은 날짜면 판정과 관계없이 투구 순서가 같음', () => {
   const seeds = challengeSeeds('2026-11-11');
-  const a = pitchesOf(new Array(9).fill('SINGLE'), seeds);
-  const b = pitchesOf(new Array(27).fill('SWING_MISS'), seeds);
-  assert.equal(a.length, 9);
-  assert.deepEqual(b.slice(0, 9), a);
+  const a = pitchesOf(new Array(10).fill('SINGLE'), seeds);
+  const b = pitchesOf(new Array(30).fill('SWING_MISS'), seeds);
+  assert.equal(a.length, 10);
+  assert.deepEqual(b.slice(0, 10), a);
 });
 test('다른 날짜면 투구 순서가 다름', () => {
-  const a = pitchesOf(new Array(9).fill('SINGLE'), challengeSeeds('2026-11-11'));
-  const b = pitchesOf(new Array(9).fill('SINGLE'), challengeSeeds('2026-11-12'));
+  const a = pitchesOf(new Array(10).fill('SINGLE'), challengeSeeds('2026-11-11'));
+  const b = pitchesOf(new Array(10).fill('SINGLE'), challengeSeeds('2026-11-12'));
   assert.notDeepEqual(a, b);
 });
 test('문자열 해시는 결정적', () => {

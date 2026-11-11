@@ -4,11 +4,12 @@
 
   const CONFIG = {
     // 게임 진행
-    AT_BATS_PER_GAME: 9,
+    AT_BATS_PER_GAME: 10, // 타율이 깔끔하게 나오도록 9 → 10
     MAX_STRIKES: 3,
+    MAX_BALLS: 3, // 한 타석 볼은 최대 3개 (4번째 볼은 던지지 않음, 볼넷 없음)
     MAX_PITCHES_PER_AT_BAT: 12, // 이 투구수 이상에서 파울이면 범타 처리
     // 다음 레벨 해제 기준 타율. [i] = Lv.(i+1)에서 이 타율 이상이면 Lv.(i+2) 해제
-    // 모두 .400 (9타석 4안타). 플레이 피드백·시뮬레이션으로 .300에서 상향
+    // 모두 .400 (10타석 4안타). 플레이 피드백·시뮬레이션으로 .300에서 상향
     UNLOCK_AVG: [0.4, 0.4],
 
     // 시간(초)
@@ -42,6 +43,7 @@
         tempo: { hold: [0.1, 0.4], motion: [0.9, 0.9] }, // 거의 일정한 리듬
         pitchMix: { '직구': 55, '투심': 25, '체인지업': 20 },
         ai: 'random',
+        ballRate: 0.25, // 볼(존 바깥) 비율. 볼 3개 이후는 스트라이크만
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
@@ -49,6 +51,7 @@
         tempo: { hold: [0, 0.8], motion: [0.7, 0.9] }, // 가끔 길게 멈춤
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
+        ballRate: 0.3,
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
@@ -56,6 +59,7 @@
         tempo: { hold: [0, 1.2], motion: [0.55, 0.9] }, // 퀵 모션과 긴 멈춤이 섞임
         pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
+        ballRate: 0.3,
         adjacent: { FOUL: 20, OUT_BIP: 30, SWING_MISS: 50 },
       },
     ],

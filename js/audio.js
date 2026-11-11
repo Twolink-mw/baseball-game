@@ -494,12 +494,12 @@
             play('bat', { clean: last.foulCapped ? 0.25 : 0.4, power: 0.35 });
             play('groan', { intensity: 0.4, delay: 0.5 });
             break;
-          default: // SWING_MISS, LOOKING: 공이 미트에 꽂힘
+          default: // SWING_MISS, LOOKING, BALL: 공이 미트에 꽂힘
             play('mitt', { speed: last.pitch.speed });
             if (last.atBatOutcome === 'STRIKEOUT') play('groan', { intensity: 0.7, delay: 0.25 });
         }
         // 안드로이드 진동 (지원하는 경우만)
-        const contact = last.result !== 'SWING_MISS' && last.result !== 'LOOKING';
+        const contact = !!last.clickCell && last.result !== 'SWING_MISS' && last.result !== 'LOOKING';
         if (contact && global.navigator && typeof global.navigator.vibrate === 'function') {
           try {
             global.navigator.vibrate(last.result === 'HOMERUN' ? 40 : 20);

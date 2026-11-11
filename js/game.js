@@ -45,6 +45,7 @@
       paused: false,
       atBat: 1,
       strikes: 0,
+      balls: 0, // 볼 카운트 (MAX_BALLS개가 되면 이후는 스트라이크만, 볼넷 없음)
       pitchInAtBat: 0,
       totalPitches: 0,
       stats: { hits: 0, singles: 0, doubles: 0, homers: 0, strikeouts: 0, outs: 0, perfects: 0 },
@@ -141,6 +142,8 @@
           } else if (g.strikes < C.MAX_STRIKES - 1) {
             g.strikes++;
           }
+        } else if (result === 'BALL') {
+          g.balls = Math.min(g.balls + 1, C.MAX_BALLS);
         } else {
           // SWING_MISS, LOOKING
           g.strikes++;
@@ -162,7 +165,7 @@
     }
 
     function startPitch(at) {
-      g.pitch = pitcher.nextPitch();
+      g.pitch = pitcher.nextPitch({ allowBall: g.balls < C.MAX_BALLS });
       g.pitchLog.push(g.pitch);
       g.pitchInAtBat++;
       g.totalPitches++;
@@ -201,6 +204,7 @@
         }
         g.atBat++;
         g.strikes = 0;
+        g.balls = 0;
         g.pitchInAtBat = 0;
         enter('AT_BAT_INTRO', g.phaseStart + resultDuration());
         return;

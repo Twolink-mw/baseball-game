@@ -8,6 +8,12 @@
   const CORNERS = [0, 2, 6, 8];
   const cellIndex = (cell) => cell.row * 3 + cell.col;
   const indexCell = (i) => ({ row: Math.floor(i / 3), col: i % 3 });
+  // 볼: 존 바로 바깥 12칸(위·아래·왼쪽·오른쪽 한 줄, 모서리 대각선 제외). row/col이 -1 또는 3
+  const BALL_CELLS = [];
+  for (let i = 0; i < 3; i++) {
+    BALL_CELLS.push({ row: -1, col: i }, { row: 3, col: i }, { row: i, col: -1 }, { row: i, col: 3 });
+  }
+  const isBallCell = (cell) => cell.row < 0 || cell.row > 2 || cell.col < 0 || cell.col > 2;
 
   // 9칸 가중치 계산
   function cellWeights(ai, lastIdx, clickHistory, C) {
@@ -46,10 +52,16 @@
     const clickHistory = []; // 칸 인덱스, 최근 historySize개
 
     return {
-      nextPitch() {
+      // opts.allowBall: false면 반드시 스트라이크 (볼 3개 이후, 볼넷 없음)
+      // 난수는 볼 허용 여부와 관계없이 항상 같은 순서로 뽑는다 → 챌린지 투구 순서가 판정 결과에 흔들리지 않음
+      nextPitch(opts) {
+        const allowBall = !opts || opts.allowBall !== false;
         const w = cellWeights(level.ai, lastIdx, clickHistory, C);
         const idx = rng.pickWeighted(w.map((x, i) => [i, x]));
         lastIdx = idx;
+        const ballRoll = rng.next();
+        const ballCell = BALL_CELLS[rng.int(BALL_CELLS.length)];
+        const ball = allowBall && ballRoll < (level.ballRate || 0);
         const type = rng.pickWeighted(level.pitchMix);
         const delta = C.PITCH_TYPES[type].speedDelta;
         const speed = Math.round(level.baseSpeed + delta + rng.range(-C.SPEED_JITTER, C.SPEED_JITTER));
@@ -57,7 +69,8 @@
         const holdSec = rng.range(level.tempo.hold[0], level.tempo.hold[1]);
         const motionSec = rng.range(level.tempo.motion[0], level.tempo.motion[1]);
         return {
-          cell: indexCell(idx),
+          cell: ball ? { row: ballCell.row, col: ballCell.col } : indexCell(idx),
+          ball,
           type,
           speed,
           flightSec: flightForSpeed(speed, C),
@@ -74,7 +87,7 @@
     };
   }
 
-  const api = { createPitcher, flightForSpeed, cellWeights, cellIndex, indexCell };
+  const api = { createPitcher, flightForSpeed, cellWeights, cellIndex, indexCell, isBallCell, BALL_CELLS };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);

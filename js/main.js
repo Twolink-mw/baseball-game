@@ -515,6 +515,51 @@
   });
   checkOrientation();
 
+  // ---- 안드로이드 뒤로가기 ----
+  // 한 페이지짜리 앱이라 기록(history)이 없으면 뒤로가기 한 번에 앱이 꺼진다.
+  // 기록 한 칸(가드)을 쌓아 두고, 뒤로가기(popstate)가 오면 화면 안에서 처리한 뒤 가드를 다시 쌓는다.
+  // 크롬은 사용자 입력 없이 쌓은 기록을 뒤로가기에서 건너뛰므로, 입력이 있을 때마다 가드가 있는지 확인한다.
+  // 타이틀에서는 '한 번 더 누르면 종료' 안내 후 두 번째 뒤로가기에 종료한다.
+  const BACK_EXIT_SEC = 2;
+  let backGuard = false;
+  let exitArmedUntil = 0;
+  function pushBackGuard() {
+    if (backGuard) return;
+    try {
+      global.history.pushState({ bbGuard: true }, '');
+      backGuard = true;
+    } catch (e) {
+      /* 지원하지 않는 환경 */
+    }
+  }
+  for (const type of ['pointerdown', 'keydown']) {
+    global.addEventListener(type, pushBackGuard, { capture: true, passive: true });
+  }
+  global.addEventListener('popstate', () => {
+    backGuard = false;
+    if (!dialog.el.hidden) closeNameDialog();
+    else if (!backup.el.hidden) closeBackupDialog();
+    else if (app.screen === 'game' && app.game) {
+      if (!app.game.paused) setPaused(true); // 경기 중: 일시정지 메뉴
+      else goTitle(); // 일시정지 중 한 번 더: 타이틀로
+    } else if (app.screen !== 'title') goTitle();
+    else if (performance.now() < exitArmedUntil) {
+      // 타이틀에서 두 번째 뒤로가기: 가드를 다시 쌓지 않고 한 번 더 뒤로 → 앱 종료
+      try {
+        global.history.back();
+      } catch (e) {
+        /* 무시 */
+      }
+      return;
+    } else {
+      exitArmedUntil = performance.now() + BACK_EXIT_SEC * 1000;
+      showToast('뒤로 버튼을 한 번 더 누르면 종료됩니다', BACK_EXIT_SEC);
+      // 가드를 다시 쌓지 않음 → 바로 한 번 더 누르면 앱이 닫힘 (그 사이 화면을 누르면 가드가 다시 생김)
+      return;
+    }
+    pushBackGuard();
+  });
+
   // ---- PWA: 서비스 워커는 http/https에서만 (file://, Electron 제외) ----
   if ('serviceWorker' in global.navigator && /^https?:$/.test(global.location.protocol)) {
     try {

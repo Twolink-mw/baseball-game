@@ -34,6 +34,11 @@ const BOTS = {
     const atTime = Math.max(earliest, g.arrivalTime + gauss(rng, 0, 0.05));
     if (atTime > g.arrivalTime + C.GRACE_SEC) return null; // 늦어서 못 침
     let cell = g.pitch.cell;
+    if (g.pitch.ball) {
+      // 볼은 대부분 골라냄. 가끔(15%) 볼 쪽 가장자리 칸으로 따라 나감
+      if (rng.next() >= 0.15) return null;
+      return { cell: { row: clampCell(cell.row), col: clampCell(cell.col) }, atTime };
+    }
     if (rng.next() < 0.05) {
       // 상하좌우 인접 칸을 잘못 누름
       const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]].filter(([dr, dc]) => clampCell(cell.row + dr) === cell.row + dr && clampCell(cell.col + dc) === cell.col + dc);
