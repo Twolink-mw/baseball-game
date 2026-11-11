@@ -29,7 +29,7 @@
   function defaultPlayer(name) {
     const unlocked = new Array(NLEVELS).fill(false);
     unlocked[0] = true;
-    return { name, unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null };
+    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null };
   }
 
   function defaultRecord() {
@@ -38,11 +38,13 @@
 
   const isAvg = (x) => x === null || (typeof x === 'number' && isFinite(x) && x >= 0 && x <= 1);
   const isCount = (x) => Number.isInteger(x) && x >= 0;
+  const isBats = (b) => b === 'R' || b === 'L'; // 우타 / 좌타
   const isDaily = (d) => d === null || (!!d && typeof d === 'object' && DATE_RE.test(d.date) && isAvg(d.avg) && d.avg !== null);
 
   function normalizePlayer(obj, name) {
     const p = defaultPlayer(name);
     if (!obj || typeof obj !== 'object') return p;
+    if (isBats(obj.bats)) p.bats = obj.bats;
     if (Array.isArray(obj.unlocked)) {
       for (let i = 0; i < NLEVELS; i++) if (obj.unlocked[i] === true) p.unlocked[i] = true;
     }
@@ -104,7 +106,8 @@
       Array.isArray(p.unlocked) && p.unlocked.length === NLEVELS && p.unlocked.every((b) => typeof b === 'boolean') &&
       Array.isArray(p.best) && p.best.length === NLEVELS && p.best.every(isAvg) &&
       isCount(p.hits) && isCount(p.atBats) && p.hits <= p.atBats && isCount(p.games) &&
-      (p.daily === undefined || isDaily(p.daily))
+      (p.daily === undefined || isDaily(p.daily)) &&
+      (p.bats === undefined || isBats(p.bats))
     );
   }
 
@@ -125,7 +128,8 @@
 
   // ---- 타자 ----
   // 이름으로 타자를 찾거나 만든 뒤 현재 타자로 지정. { record, key, created } 또는 { error: 'invalid'|'full' }
-  function ensurePlayer(record, name) {
+  // bats('R'|'L')를 주면 그 타자의 타석 방향도 바꾼다. 생략하면 새 타자는 우타, 기존 타자는 그대로
+  function ensurePlayer(record, name, bats) {
     const n = normalizeName(name);
     if (n === null) return { error: 'invalid' };
     const r = normalizeRecord(record);
@@ -136,6 +140,7 @@
       r.players[key] = defaultPlayer(n);
       created = true;
     }
+    if (isBats(bats)) r.players[key].bats = bats;
     r.current = key;
     return { record: r, key, created };
   }
@@ -195,7 +200,7 @@
 
   // ---- 가져오기 병합 ----
   // 타자별: 최고 타율 큰 값, 해제 OR, 통산/게임 수는 타수가 많은 쪽(합치면 중복 집계), daily는 늦은 날짜.
-  // 한쪽에만 있는 타자는 추가. 현재 타자/설정은 base(현재 기기) 유지
+  // 한쪽에만 있는 타자는 추가. 현재 타자/설정/타석 방향은 base(현재 기기) 유지
   function mergeRecords(base, incoming) {
     const r = normalizeRecord(base);
     const b = normalizeRecord(incoming);

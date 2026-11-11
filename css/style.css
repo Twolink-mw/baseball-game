@@ -69,6 +69,48 @@ body {
   font-size: 14px;
 }
 
+/* 우타/좌타 선택 */
+.bats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.bats label {
+  flex: 1;
+}
+
+.bats input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bats span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: #0b1526;
+  font-size: 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.bats input:checked + span {
+  border-color: #ffd34d;
+  background: #3a3010;
+  color: #ffd34d;
+  font-weight: bold;
+}
+
+.bats input:focus-visible + span {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

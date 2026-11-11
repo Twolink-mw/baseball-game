@@ -169,7 +169,16 @@
       if (g.click && (g.phase === 'PITCH_FLIGHT' || g.phase === 'RESULT_SHOW')) {
         swing = clamp01((g.time - g.click.atTime) / FX.swingSec);
       }
-      S.drawBatter(ctx, swing);
+      // 그림은 좌타자(화면 오른쪽, 1루 쪽) 기준. 우타자는 좌우를 뒤집어 화면 왼쪽(3루 쪽)에 그린다
+      if (g.bats === 'R') {
+        ctx.save();
+        ctx.translate(L.width, 0);
+        ctx.scale(-1, 1);
+        S.drawBatter(ctx, swing);
+        ctx.restore();
+      } else {
+        S.drawBatter(ctx, swing);
+      }
     }
 
     function drawZone(g, hover) {
@@ -259,16 +268,18 @@
     }
 
     // ---- 타구 연출 ----
-    // 타이밍이 빠르면 당겨 친 방향(화면 오른쪽), 늦으면 반대 방향
-    function hitDir(last) {
-      let d = last.deltaSec === null ? 0 : -last.deltaSec / 0.1;
+    // 타이밍이 빠르면 당겨 친 방향(좌타는 화면 오른쪽, 우타는 왼쪽), 늦으면 반대 방향.
+    // 몸쪽 코스(타자 쪽 칸)는 당기는 쪽으로 조금 더 간다
+    function hitDir(last, bats) {
+      const pull = bats === 'R' ? -1 : 1;
+      let d = last.deltaSec === null ? 0 : (pull * -last.deltaSec) / 0.1;
       d += (last.pitch.cell.col - 1) * 0.25;
       return Math.max(-1, Math.min(1, d));
     }
 
     function flightSpec(g) {
       const last = g.last;
-      const d = hitDir(last);
+      const d = hitDir(last, g.bats);
       const side = d >= 0 ? 1 : -1;
       switch (last.result) {
         case 'HOMERUN':
@@ -384,7 +395,7 @@
       ctx.fillStyle = 'rgba(10,15,25,0.72)';
       ctx.fill();
       const title = g.mode === 'challenge' ? '오늘의 챌린지 ' + view.today.slice(5).replace('-', '/') : g.level.name + ' ' + g.level.baseSpeed + 'km';
-      text(g.playerName, 32, 40, 22, '#fff', 'left', 'bold');
+      text(g.playerName + (g.bats === 'L' ? ' (좌타)' : ' (우타)'), 32, 40, 22, '#fff', 'left', 'bold');
       text(title, 32, 70, 18, '#ffd34d', 'left', 'bold');
       text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
       text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18);
@@ -514,7 +525,7 @@
       const p = view.player;
       if (p) {
         const career = BB.careerAvg(p);
-        text('타자', bx + 20, by + 27, 18, '#9ab', 'left');
+        text(p.bats === 'L' ? '좌타' : '우타', bx + 20, by + 27, 18, '#9cf', 'left', 'bold');
         text(p.name, bx + 68, by + 27, 24, '#ffd34d', 'left', 'bold');
         text('통산 ' + (career === null ? '-' : BB.formatAvg(career)) + ' (' + p.atBats + '타수)', bx + 270, by + 27, 18, '#dde', 'left');
       } else {

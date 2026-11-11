@@ -42,13 +42,24 @@
     error: document.getElementById('name-error'),
     list: document.getElementById('name-list'),
     cancel: document.getElementById('name-cancel'),
+    bats: Array.from(document.querySelectorAll('#name-form input[name="bats"]')),
     pending: null, // 확인 후 실행할 동작
   };
+
+  function getBats() {
+    const r = dialog.bats.find((b) => b.checked);
+    return r ? r.value : 'R';
+  }
+
+  function setBats(v) {
+    for (const b of dialog.bats) b.checked = b.value === v;
+  }
 
   function openNameDialog(pending) {
     dialog.pending = pending || null;
     const p = currentPlayer();
     dialog.input.value = p ? p.name : '';
+    setBats(p ? p.bats : 'R');
     dialog.error.textContent = '';
     dialog.list.textContent = '';
     for (const q of BB.rankPlayers(app.record)) {
@@ -69,8 +80,9 @@
     dialog.input.blur();
   }
 
-  function confirmName(name) {
-    const res = BB.ensurePlayer(app.record, name);
+  // bats를 생략하면(기존 타자 버튼) 그 타자의 저장된 타석 방향을 그대로 쓴다
+  function confirmName(name, bats) {
+    const res = BB.ensurePlayer(app.record, name, bats);
     if (res.error === 'invalid') {
       dialog.error.textContent = '이름을 1~' + C.NAME_MAX + '자로 입력하세요.';
       return;
@@ -87,7 +99,13 @@
 
   dialog.form.addEventListener('submit', (e) => {
     e.preventDefault();
-    confirmName(dialog.input.value);
+    confirmName(dialog.input.value, getBats());
+  });
+  // 기존 타자 이름을 입력하면 그 타자의 우타/좌타를 미리 선택
+  dialog.input.addEventListener('input', () => {
+    const key = BB.playerKey(dialog.input.value);
+    const q = key && app.record.players[key];
+    if (q) setBats(q.bats);
   });
   dialog.cancel.addEventListener('click', closeNameDialog);
   dialog.el.addEventListener('keydown', (e) => {
@@ -112,7 +130,7 @@
       const now = Date.now();
       seeds = { pitchSeed: BB.hashString('p' + now), judgeSeed: BB.hashString('j' + now) };
     }
-    app.game = BB.createGame({ levelIndex, mode, pitchSeed: seeds.pitchSeed, judgeSeed: seeds.judgeSeed, playerName: p.name });
+    app.game = BB.createGame({ levelIndex, mode, pitchSeed: seeds.pitchSeed, judgeSeed: seeds.judgeSeed, playerName: p.name, bats: p.bats });
     if (mode === 'normal') app.lastLevel = levelIndex;
     app.screen = 'game';
     app.lastFrameTs = null;

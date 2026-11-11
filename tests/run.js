@@ -466,5 +466,31 @@ test('mergeRecords: 타자별 병합 + 없는 타자 추가 + 현재 타자/설�
   assert.equal(m.settings.muted, true);
 });
 
+test('우타/좌타: 새 타자는 우타, 지정하면 저장, 생략하면 기존 값 유지', () => {
+  let r = S.ensurePlayer(S.defaultRecord(), '가').record;
+  assert.equal(r.players['가'].bats, 'R');
+  r = S.ensurePlayer(r, '나', 'L').record;
+  assert.equal(r.players['나'].bats, 'L');
+  r = S.ensurePlayer(r, '나').record; // 기존 타자 버튼으로 선택
+  assert.equal(r.players['나'].bats, 'L');
+  r = S.ensurePlayer(r, ' 나 ', 'R').record; // 같은 이름 + 우타로 변경
+  assert.equal(r.players['나'].bats, 'R');
+  r = S.ensurePlayer(r, '다', 'X').record; // 잘못된 값은 무시
+  assert.equal(r.players['다'].bats, 'R');
+});
+test('우타/좌타: 저장값 정규화·검증·병합', () => {
+  const base = S.ensurePlayer(S.defaultRecord(), '가', 'L').record;
+  // 이전 기록(bats 없음)은 우타, 잘못된 값도 우타로 복구
+  const old = JSON.parse(JSON.stringify(base));
+  delete old.players['가'].bats;
+  assert.equal(S.normalizeRecord(old).players['가'].bats, 'R');
+  old.players['가'].bats = 'X';
+  assert.equal(S.normalizeRecord(old).players['가'].bats, 'R');
+  assert.equal(S.validateRecord(old), null, '가져오기는 잘못된 값 거부');
+  // 병합 시 현재 기기의 설정 유지
+  const other = S.ensurePlayer(S.defaultRecord(), '가', 'R').record;
+  assert.equal(S.mergeRecords(base, other).players['가'].bats, 'L');
+});
+
 console.log(`\n${passed} 통과, ${failed} 실패`);
 process.exitCode = failed ? 1 : 0;

@@ -38,6 +38,7 @@
       levelIndex: opts.levelIndex,
       mode: opts.mode || 'normal',
       playerName: opts.playerName || '', // 표시용
+      bats: opts.bats === 'L' ? 'L' : 'R', // 표시용: 우타(R) / 좌타(L)
       phase: 'AT_BAT_INTRO',
       time: 0,
       phaseStart: 0,
