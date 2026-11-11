@@ -83,7 +83,30 @@
       minHistory: 5, // adaptive: 이보다 적으면 weak처럼 동작
     },
 
-    CHALLENGE: { level: 2 }, // 오늘의 챌린지에 쓰는 레벨(1부터)
+    // 오늘의 챌린지: Lv.2(level)를 바탕으로 날짜마다 '오늘의 투수'와 '오늘의 미션'을 하나씩 고른다
+    CHALLENGE: {
+      level: 2, // 바탕 레벨(1부터). 결과는 이 레벨 번호로 저장되지만 최고 타율·해제에는 반영 안 됨
+      // 오늘의 투수: 바탕 레벨 값을 덮어쓴다. ai는 random/weak만 (사용자 클릭에 반응하면 기기마다 투구 순서가 달라짐)
+      pitchers: [
+        { name: '정통파', desc: '오늘은 평범한 정통파' },
+        { name: '강속구', desc: '직구 위주의 빠른 공', baseSpeed: 158, ballRate: 0.25, pitchMix: { '직구': 60, '투심': 20, '슬라이더': 20 } },
+        { name: '커브볼러', desc: '느린 커브로 타이밍을 뺏음', baseSpeed: 148, pitchMix: { '직구': 35, '커브': 40, '체인지업': 25 } },
+        { name: '제구 난조', desc: '볼이 많은 투수, 골라내야 산다', ballRate: 0.45 },
+        { name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] } },
+        { name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 } },
+      ],
+      // 오늘의 미션. stat: homers, hits, strikeouts, extraBases(2루타+홈런), perfects, hitStreak(연속 타석 안타), firstHit(첫 타석 안타 1/0)
+      // min: 이 값 이상이면 달성, max: 게임이 끝났을 때 이 값 이하이면 달성
+      missions: [
+        { text: '홈런 1개', stat: 'homers', min: 1 },
+        { text: '안타 5개 이상', stat: 'hits', min: 5 },
+        { text: '삼진 2개 이하', stat: 'strikeouts', max: 2 },
+        { text: '장타(2루타·홈런) 2개', stat: 'extraBases', min: 2 },
+        { text: '정확 타이밍 4번', stat: 'perfects', min: 4 },
+        { text: '3타석 연속 안타', stat: 'hitStreak', min: 3 },
+        { text: '첫 타석 안타', stat: 'firstHit', min: 1 },
+      ],
+    },
 
     // 화면 배치(논리 좌표)
     LAYOUT: {

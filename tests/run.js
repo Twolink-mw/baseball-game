@@ -403,6 +403,95 @@ test('다른 날짜면 투구 순서가 다름', () => {
   const b = pitchesOf(new Array(10).fill('SINGLE'), challengeSeeds('2026-11-12'));
   assert.notDeepEqual(a, b);
 });
+test('오늘의 투수·미션: 같은 날짜면 같음, 여러 날짜에 고루 나옴, 투수 AI는 클릭과 무관', () => {
+  const { challengeSetup } = require('../js/game.js');
+  const a = challengeSetup('2026-11-12');
+  const b = challengeSetup('2026-11-12');
+  assert.equal(a.pitcher.name, b.pitcher.name);
+  assert.equal(a.mission.text, b.mission.text);
+  assert.equal(a.levelIndex, CONFIG.CHALLENGE.level - 1);
+  const pitchers = new Set();
+  const missions = new Set();
+  for (let d = 1; d <= 60; d++) {
+    const date = '2026-' + String(1 + Math.floor((d - 1) / 28)).padStart(2, '0') + '-' + String(1 + ((d - 1) % 28)).padStart(2, '0');
+    const x = challengeSetup(date);
+    pitchers.add(x.pitcher.name);
+    missions.add(x.mission.text);
+    assert.ok(x.level.ai === 'random' || x.level.ai === 'weak', '챌린지에 adaptive 금지');
+    assert.equal(x.level.title, x.pitcher.name);
+  }
+  assert.equal(pitchers.size, CONFIG.CHALLENGE.pitchers.length);
+  assert.equal(missions.size, CONFIG.CHALLENGE.missions.length);
+  // 투수 덮어쓰기
+  const fast = CONFIG.CHALLENGE.pitchers.find((p) => p.name === '강속구');
+  for (let d = 1; d <= 200; d++) {
+    const x = challengeSetup('2027-01-' + d);
+    if (x.pitcher === fast) {
+      assert.equal(x.level.baseSpeed, fast.baseSpeed);
+      assert.deepEqual(x.level.pitchMix, fast.pitchMix);
+      assert.equal(x.level.revealSec, CONFIG.LEVELS[1].revealSec, '나머지는 바탕 레벨 값');
+      break;
+    }
+  }
+});
+test('챌린지 게임: 오늘의 투수 레벨로 던지고, 투구 순서는 판정과 무관', () => {
+  const { challengeSetup } = require('../js/game.js');
+  for (const date of ['2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15']) {
+    const s = challengeSetup(date);
+    const mk = (results) => createGame({ levelIndex: s.levelIndex, level: s.level, mission: s.mission, mode: 'challenge', pitchSeed: s.pitchSeed, judgeSeed: s.judgeSeed, judgeFn: scriptedJudge(results) });
+    const g1 = mk(new Array(10).fill('SINGLE'));
+    while (g1.phase !== 'GAME_OVER') playPitch(g1);
+    const g2 = mk(new Array(30).fill('SWING_MISS'));
+    while (g2.phase !== 'GAME_OVER') playPitch(g2);
+    const key = (p) => [p.cell.row, p.cell.col, p.type, p.speed].join();
+    assert.deepEqual(g2.pitchLog.slice(0, 10).map(key), g1.pitchLog.map(key));
+    for (const p of g1.pitchLog) assert.ok(p.type in s.level.pitchMix);
+    assert.equal(g1.summary().pitcherName, s.pitcher.name);
+    assert.deepEqual(g1.summary().atBatLog, new Array(10).fill('SINGLE'));
+  }
+});
+
+section('챌린지 미션');
+test('미션 진행: min형은 도중 달성, max형은 넘으면 실패·끝나야 달성, 첫 타석/연속 안타', () => {
+  const { missionProgress, hitStreak } = require('../js/game.js');
+  const st = (o) => Object.assign({ hits: 0, singles: 0, doubles: 0, homers: 0, strikeouts: 0, outs: 0, perfects: 0 }, o);
+  assert.deepEqual(missionProgress({ stat: 'homers', min: 1 }, st({ homers: 1 }), ['HOMERUN'], false), { value: 1, done: true, failed: false });
+  assert.deepEqual(missionProgress({ stat: 'homers', min: 1 }, st({}), [], true), { value: 0, done: false, failed: true });
+  assert.deepEqual(missionProgress({ stat: 'strikeouts', max: 2 }, st({ strikeouts: 2 }), [], false), { value: 2, done: false, failed: false });
+  assert.deepEqual(missionProgress({ stat: 'strikeouts', max: 2 }, st({ strikeouts: 2 }), [], true), { value: 2, done: true, failed: false });
+  assert.equal(missionProgress({ stat: 'strikeouts', max: 2 }, st({ strikeouts: 3 }), [], false).failed, true);
+  assert.equal(missionProgress({ stat: 'extraBases', min: 2 }, st({ doubles: 1, homers: 1 }), [], false).done, true);
+  assert.equal(missionProgress({ stat: 'firstHit', min: 1 }, st({}), ['OUT_BIP', 'SINGLE'], false).failed, true);
+  assert.equal(missionProgress({ stat: 'firstHit', min: 1 }, st({}), ['DOUBLE'], false).done, true);
+  assert.equal(hitStreak(['SINGLE', 'OUT_BIP', 'SINGLE', 'HOMERUN', 'DOUBLE', 'STRIKEOUT']), 3);
+  assert.equal(missionProgress({ stat: 'hitStreak', min: 3 }, st({}), ['SINGLE', 'HOMERUN', 'DOUBLE'], false).done, true);
+});
+test('미션 달성은 그날 공식 판만 누적, 저장 검증·병합', () => {
+  let rec = S.ensurePlayer(S.defaultRecord ? S.defaultRecord() : S.normalizeRecord(null), '미션').record;
+  const key = rec.current;
+  const ch = (r, done, date) => S.applyGameResult(r, { playerKey: key, levelIndex: 1, hits: 3, atBats: 10, mode: 'challenge', date, missionDone: done });
+  let r = ch(rec, true, '2026-11-12');
+  assert.equal(r.record.players[key].missions, 1);
+  assert.equal(r.record.players[key].daily.mission, true);
+  r = ch(r.record, true, '2026-11-12'); // 같은 날 연습
+  assert.equal(r.official, false);
+  assert.equal(r.record.players[key].missions, 1);
+  r = ch(r.record, false, '2026-11-13');
+  assert.equal(r.record.players[key].missions, 1);
+  assert.equal(r.record.players[key].daily.mission, undefined);
+  // 저장했다 불러와도 유지, 잘못된 값은 버림
+  const back = S.normalizeRecord(JSON.parse(JSON.stringify(ch(r.record, true, '2026-11-14').record)));
+  assert.equal(back.players[key].missions, 2);
+  assert.equal(back.players[key].daily.mission, true);
+  const bad = JSON.parse(JSON.stringify(back));
+  bad.players[key].missions = -1;
+  assert.equal(S.normalizeRecord(bad).players[key].missions, 0);
+  // 병합: 큰 쪽
+  const other = JSON.parse(JSON.stringify(back));
+  other.players[key].missions = 5;
+  assert.equal(S.mergeRecords(back, other).players[key].missions, 5);
+});
+
 test('문자열 해시는 결정적', () => {
   assert.equal(hashString('abc'), hashString('abc'));
   assert.notEqual(hashString('abc'), hashString('abd'));

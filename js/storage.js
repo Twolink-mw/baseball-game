@@ -29,7 +29,7 @@
   function defaultPlayer(name) {
     const unlocked = new Array(NLEVELS).fill(false);
     unlocked[0] = true;
-    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null };
+    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0 };
   }
 
   function defaultRecord() {
@@ -39,7 +39,8 @@
   const isAvg = (x) => x === null || (typeof x === 'number' && isFinite(x) && x >= 0 && x <= 1);
   const isCount = (x) => Number.isInteger(x) && x >= 0;
   const isBats = (b) => b === 'R' || b === 'L'; // 우타 / 좌타
-  const isDaily = (d) => d === null || (!!d && typeof d === 'object' && DATE_RE.test(d.date) && isAvg(d.avg) && d.avg !== null);
+  const isDaily = (d) =>
+    d === null || (!!d && typeof d === 'object' && DATE_RE.test(d.date) && isAvg(d.avg) && d.avg !== null && (d.mission === undefined || typeof d.mission === 'boolean'));
 
   function normalizePlayer(obj, name) {
     const p = defaultPlayer(name);
@@ -54,7 +55,11 @@
     if (isCount(obj.atBats)) p.atBats = obj.atBats;
     if (isCount(obj.hits) && obj.hits <= p.atBats) p.hits = obj.hits;
     if (isCount(obj.games)) p.games = obj.games;
-    if (obj.daily && isDaily(obj.daily)) p.daily = { date: obj.daily.date, avg: obj.daily.avg };
+    if (obj.daily && isDaily(obj.daily)) {
+      p.daily = { date: obj.daily.date, avg: obj.daily.avg };
+      if (obj.daily.mission === true) p.daily.mission = true; // 그날 공식 판에서 미션 달성
+    }
+    if (isCount(obj.missions)) p.missions = obj.missions; // 챌린지 미션 누적 달성 횟수
     p.unlocked[0] = true;
     return p;
   }
@@ -107,6 +112,7 @@
       Array.isArray(p.best) && p.best.length === NLEVELS && p.best.every(isAvg) &&
       isCount(p.hits) && isCount(p.atBats) && p.hits <= p.atBats && isCount(p.games) &&
       (p.daily === undefined || isDaily(p.daily)) &&
+      (p.missions === undefined || isCount(p.missions)) &&
       (p.bats === undefined || isBats(p.bats))
     );
   }
@@ -170,8 +176,9 @@
   }
 
   // ---- 게임 결과 ----
-  // 일반 게임: 통산(안타/타수) 누적, 최고 타율, 다음 레벨 해제. 챌린지: 그날 첫 판만 daily에 기록
-  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date }) {
+  // 일반 게임: 통산(안타/타수) 누적, 최고 타율, 다음 레벨 해제.
+  // 챌린지: 그날 첫 판만 daily에 기록하고, 미션을 달성했으면 누적 달성 횟수 +1
+  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date, missionDone }) {
     const r = normalizeRecord(record);
     const p = r.players[key];
     if (!p) throw new Error('없는 타자: ' + key);
@@ -180,7 +187,13 @@
     p.games++;
     if (mode === 'challenge') {
       const official = !p.daily || p.daily.date !== date;
-      if (official) p.daily = { date, avg };
+      if (official) {
+        p.daily = { date, avg };
+        if (missionDone) {
+          p.daily.mission = true;
+          p.missions++;
+        }
+      }
       return { record: r, official, newRecord: false, unlockedLevel: null, careerBefore, careerAfter: careerBefore };
     }
     p.hits += hits;
@@ -221,6 +234,7 @@
         p.atBats = q.atBats;
       }
       p.games = Math.max(p.games, q.games);
+      p.missions = Math.max(p.missions, q.missions);
       if (!p.daily || (q.daily && q.daily.date > p.daily.date)) p.daily = q.daily ? clone(q.daily) : p.daily;
     }
     return r;

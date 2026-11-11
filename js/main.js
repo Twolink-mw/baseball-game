@@ -240,8 +240,16 @@
     if (!r) return;
     const card = renderer.makeShareCard(r, performance.now() / 1000);
     const s = r.summary;
-    const title = s.mode === 'challenge' ? r.date.slice(5).replace('-', '/') + ' 챌린지' : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title;
-    const msg = '타자 시점 야구 · ' + r.playerName + ' · ' + title + ' ' + BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
+    const title = s.mode === 'challenge' ? r.date.slice(5).replace('-', '/') + ' 챌린지(' + s.pitcherName + ')' : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title;
+    let msg = '타자 시점 야구 · ' + r.playerName + ' · ' + title + ' ' + BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
+    if (s.mode === 'challenge') {
+      // 타석별 결과 격자: 같은 날 같은 공을 상대했으니 타석끼리 비교할 수 있다
+      const EMOJI = { HOMERUN: '🟥', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
+      msg += '
+' + s.atBatLog.map((o) => EMOJI[o] || '⬜').join('');
+      msg += '
+미션 ' + s.mission.text + (s.missionDone ? ' 달성!' : ' 실패');
+    }
     const filename = 'bbgame-' + r.date + '-' + r.playerName + '.png';
     card.toBlob((blob) => {
       if (!blob) return showToast('이미지를 만들지 못했습니다');
@@ -270,16 +278,18 @@
   function startGame(levelIndex, mode) {
     const p = currentPlayer();
     if (!p) return openNameDialog(() => startGame(levelIndex, mode));
-    let seeds;
+    let setup;
     if (mode === 'challenge') {
-      levelIndex = C.CHALLENGE.level - 1;
-      seeds = BB.challengeSeeds(today());
+      setup = BB.challengeSetup(today()); // 오늘의 투수·미션·시드
     } else {
       if (!p.unlocked[levelIndex]) return; // 이 타자는 아직 잠긴 레벨
       const now = Date.now();
-      seeds = { pitchSeed: BB.hashString('p' + now), judgeSeed: BB.hashString('j' + now) };
+      setup = { levelIndex, pitchSeed: BB.hashString('p' + now), judgeSeed: BB.hashString('j' + now) };
     }
-    app.game = BB.createGame({ levelIndex, mode, pitchSeed: seeds.pitchSeed, judgeSeed: seeds.judgeSeed, playerName: p.name, bats: p.bats });
+    app.game = BB.createGame({
+      levelIndex: setup.levelIndex, level: setup.level, mission: setup.mission, mode,
+      pitchSeed: setup.pitchSeed, judgeSeed: setup.judgeSeed, playerName: p.name, bats: p.bats,
+    });
     if (mode === 'normal') app.lastLevel = levelIndex;
     app.screen = 'game';
     app.lastFrameTs = null;
@@ -295,6 +305,7 @@
     if (!player) return goTitle(); // 게임 중 타자가 사라진 경우(정상 흐름에선 없음)
     const applied = BB.applyGameResult(app.record, {
       playerKey: key, levelIndex: g.levelIndex, hits: summary.hits, atBats: C.AT_BATS_PER_GAME, mode: g.mode, date,
+      missionDone: summary.missionDone,
     });
     setRecord(applied.record);
     app.result = Object.assign(

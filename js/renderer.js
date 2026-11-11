@@ -21,6 +21,14 @@
     BALL: '볼',
   };
   const HITS = { HOMERUN: 1, DOUBLE: 1, SINGLE: 1 };
+  // 타석별 결과 격자 (챌린지 결과·공유 카드)
+  const GRID = {
+    HOMERUN: ['홈런', '#ff5a5a', '#fff'],
+    DOUBLE: ['2루타', '#ff9f43', '#111'],
+    SINGLE: ['안타', '#ffd34d', '#111'],
+    OUT_BIP: ['범타', '#8b97a8', '#111'],
+    STRIKEOUT: ['삼진', '#262d3a', '#ff8a8a'],
+  };
   const BOARD_FLASH = { HOMERUN: 'HOME RUN!', DOUBLE: '2루타!', SINGLE: 'HIT!' };
 
   const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
@@ -478,11 +486,26 @@
       ctx.fill();
     }
 
+    // HUD 높이: 챌린지는 미션 줄이 하나 더 있음
+    const hudHeight = (g) => (g.mission ? 234 : 204);
+
+    // 미션 진행 한 줄: 문구와 색
+    function missionLine(g) {
+      const m = g.mission;
+      const pr = g.missionProgress();
+      if (pr.done) return { str: '미션 ' + m.text + ' ✓', color: '#7cf29a' };
+      if (pr.failed) return { str: '미션 ' + m.text + ' ✗', color: '#ff8a8a' };
+      const now = m.max != null ? ' (지금 ' + pr.value + ')' : ' (' + pr.value + '/' + m.min + ')';
+      return { str: '미션 ' + m.text + now, color: '#ffe9a0' };
+    }
+
     function drawHud(g, view) {
-      roundRect(16, 16, 280, 204, 12);
+      roundRect(16, 16, 280, hudHeight(g), 12);
       ctx.fillStyle = 'rgba(10,15,25,0.72)';
       ctx.fill();
-      const title = g.mode === 'challenge' ? '오늘의 챌린지 ' + view.today.slice(5).replace('-', '/') : g.level.name + ' ' + g.level.title + ' ' + g.level.baseSpeed + 'km';
+      const title = g.mode === 'challenge'
+        ? view.today.slice(5).replace('-', '/') + ' 챌린지 · ' + g.level.title + ' ' + g.level.baseSpeed + 'km'
+        : g.level.name + ' ' + g.level.title + ' ' + g.level.baseSpeed + 'km';
       text(g.playerName + (g.bats === 'L' ? ' (좌타)' : ' (우타)'), 32, 40, 22, '#fff', 'left', 'bold');
       text(title, 32, 70, 18, '#ffd34d', 'left', 'bold');
       text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
@@ -494,6 +517,10 @@
       for (let i = 0; i < C.MAX_BALLS; i++) lamp(60 + i * 26, 186, i < g.balls, '#4fd27a');
       text('S', 150, 186, 18, '#fff', 'left', 'bold');
       for (let i = 0; i < C.MAX_STRIKES - 1; i++) lamp(178 + i * 26, 186, i < g.strikes, '#f2c230');
+      if (g.mission) {
+        const ml = missionLine(g);
+        text(ml.str, 32, 218, 16, ml.color, 'left', 'bold');
+      }
     }
 
     function drawBoard(g, now) {
@@ -537,7 +564,7 @@
       const prev = g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
       x = x == null ? LOG_X_RIGHT : x;
       const onLeft = x < L.width / 2; // 왼쪽이면 HUD 아래부터
-      const y = onLeft ? 232 : 150;
+      const y = onLeft ? 16 + hudHeight(g) + 12 : 150;
       const w = LOG_W;
       const bottom = onLeft ? 708 : 640; // 오른쪽은 아래 버튼 위까지
       const cs = 40; // 미니 존 칸 크기
@@ -776,17 +803,24 @@
 
       // 오늘의 챌린지
       const cx = 640 - 300;
-      const cy = 450;
-      roundRect(cx, cy, 600, 110, 16);
+      const cy = 446;
+      const ch = BB.challengeSetup(view.today);
+      roundRect(cx, cy, 600, 134, 16);
       ctx.fillStyle = 'rgba(60,46,10,0.8)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,211,77,0.8)';
       ctx.lineWidth = 2;
       ctx.stroke();
-      text('오늘의 챌린지 ' + view.today.slice(5).replace('-', '/'), 640, cy + 36, 28, '#ffd34d', 'center', 'bold');
-      const d = rec.daily && rec.daily.date === view.today ? '오늘 기록 ' + BB.formatAvg(rec.daily.avg) + ' (다시 하면 연습)' : '모두 같은 투구 순서 · ' + C.LEVELS[C.CHALLENGE.level - 1].name + ' 규칙 · 첫 판만 기록';
-      text(d, 640, cy + 76, 18, '#eee', 'center');
-      hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
+      text('오늘의 챌린지 ' + view.today.slice(5).replace('-', '/'), 640, cy + 30, 26, '#ffd34d', 'center', 'bold');
+      text('투수 ' + ch.pitcher.name + ' ' + ch.level.baseSpeed + 'km · ' + ch.pitcher.desc, 640, cy + 64, 18, '#fff', 'center', 'bold');
+      const played = rec.daily && rec.daily.date === view.today;
+      const missionStr = '미션 ' + ch.mission.text + (played ? (rec.daily.mission ? ' ✓ 달성' : ' ✗') : '');
+      text(missionStr, 640, cy + 92, 18, played ? (rec.daily.mission ? '#7cf29a' : '#ff8a8a') : '#ffe9a0', 'center', 'bold');
+      const d = played
+        ? '오늘 기록 ' + BB.formatAvg(rec.daily.avg) + ' (다시 하면 연습) · 미션 누적 ' + (rec.missions || 0) + '회'
+        : '모두 같은 투구 순서 · 첫 판만 기록 · 미션 누적 ' + (rec.missions || 0) + '회';
+      text(d, 640, cy + 118, 15, '#ccd', 'center');
+      hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 134 });
 
       const hint = touch
         ? '조작: 공이 오는 칸을 존에서 직접 누르거나, 화면 구석의 3×3 패드를 누르세요'
@@ -851,7 +885,7 @@
       const r = view.result;
       const s = r.summary;
       drawBackdrop(view.now, 'rgba(8,14,26,0.84)');
-      const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
+      const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + ' · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
       text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
       const e = view.now - (r.shownAt || 0); // 결과 화면에 들어온 뒤 경과(초)
       text('이번 타율', 640, 118, 24, '#aaa', 'center');
@@ -864,7 +898,9 @@
       if (s.mode === 'normal') {
         text('통산 타율 ' + avgOr(r.careerBefore) + ' → ' + avgOr(r.careerAfter) + '  (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, y, 24, '#fff', 'center', 'bold');
       } else {
-        text('챌린지는 통산 타율에 반영되지 않습니다', 640, y, 20, '#9ab', 'center');
+        // 타석별 결과 격자 + 미션
+        drawOutcomeGrid(s.atBatLog, 640, y - 22, 48);
+        y += 64;
       }
       y += 50;
       // 기록 갱신·레벨 해제: 타율이 다 올라간 뒤 차례로 튀어나오고 깜빡임
@@ -886,6 +922,11 @@
         badge(C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a', r.newRecord ? 1.1 : 0.8);
         y += 46;
       }
+      if (s.mission) {
+        if (s.missionDone) badge('미션 달성! ' + s.mission.text + (r.official ? '' : ' (연습)'), '#7cf29a', 0.8);
+        else text('미션 실패 · ' + s.mission.text, 640, y, 26, '#ff8a8a', 'center', 'bold');
+        y += 46;
+      }
       const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + ' · 홈런 ' + s.homers + ')';
       const line2 = '삼진 ' + s.strikeouts + ' · 범타 ' + s.outs + ' · 총 투구수 ' + s.totalPitches + ' · 정확 타이밍 ' + s.perfects;
       text(line1, 640, y + 20, 24, '#fff', 'center');
@@ -900,6 +941,25 @@
       buttons.push(['menu', '메뉴로', false]);
       const total = buttons.length * bw + (buttons.length - 1) * 24;
       buttons.forEach(([id, label, primary], i) => button(id, (L.width - total) / 2 + i * (bw + 24), by, bw, 64, label, { primary }));
+    }
+
+    // 타석별 결과를 색 칸으로 한 줄에 (가운데 cx, 위쪽 y)
+    function drawOutcomeGrid(log, cx, y, size) {
+      const gap = 8;
+      const n = C.AT_BATS_PER_GAME;
+      const x0 = cx - (n * size + (n - 1) * gap) / 2;
+      for (let i = 0; i < n; i++) {
+        const x = x0 + i * (size + gap);
+        const g = GRID[log[i]];
+        roundRect(x, y, size, size, 8);
+        ctx.fillStyle = g ? g[1] : 'rgba(255,255,255,0.08)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (g) text(g[0], x + size / 2, y + size / 2 + 1, Math.round(size * 0.29), g[2], 'center', 'bold');
+        text(String(i + 1), x + size / 2, y + size + 14, 13, '#9ab', 'center');
+      }
     }
 
     // 짧은 안내(토스트): 모든 화면 맨 위
@@ -941,7 +1001,7 @@
         const bats = r.player && r.player.bats === 'L' ? '좌타' : '우타';
         const mode =
           s.mode === 'challenge'
-            ? r.date.slice(5).replace('-', '/') + ' 챌린지' + (r.official ? '' : ' (연습)')
+            ? r.date.slice(5).replace('-', '/') + ' 챌린지 · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)')
             : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title + ' · ' + C.LEVELS[s.levelIndex].baseSpeed + 'km';
         outlined(r.playerName, 640, 150, 56, '#ffd34d');
         text(bats + ' · ' + mode, 640, 210, 28, '#fff', 'center', 'bold');
@@ -951,7 +1011,9 @@
         if (s.mode === 'normal' && r.careerAfter !== null) {
           text('통산 타율 ' + BB.formatAvg(r.careerAfter) + ' (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, 520, 26, '#cde', 'center', 'bold');
         }
+        if (s.mode === 'challenge') drawOutcomeGrid(s.atBatLog, 640, 500, 52);
         const badges = [];
+        if (s.mission && s.missionDone) badges.push(['미션 달성! ' + s.mission.text, '#7cf29a']);
         if (r.newRecord) badges.push(['NEW RECORD', '#ff6b6b']);
         if (r.unlockedLevel !== null) badges.push([C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a']);
         badges.forEach(([str, col], i) => outlined(str, 640 + (i - (badges.length - 1) / 2) * 360, 600, 40, col));

@@ -23,10 +23,63 @@
     };
   }
 
-  // opts: { levelIndex, mode: 'normal'|'challenge', pitchSeed, judgeSeed, config?, judgeFn? }
+  // 오늘의 챌린지 구성: 날짜로 투수·미션을 고르고, 바탕 레벨에 투수 값을 덮어쓴 레벨을 만든다.
+  // 투구·판정 RNG와 별도의 해시를 쓰므로 투구 순서에는 영향이 없다
+  function challengeSetup(dateStr, config) {
+    const C = config || BB.CONFIG;
+    const CH = C.CHALLENGE;
+    const base = C.LEVELS[CH.level - 1];
+    const pitcher = CH.pitchers[BB.hashString('bbgame-challenge-pitcher:' + dateStr) % CH.pitchers.length];
+    const mission = CH.missions[BB.hashString('bbgame-challenge-mission:' + dateStr) % CH.missions.length];
+    const over = Object.assign({}, pitcher);
+    delete over.name;
+    delete over.desc;
+    const level = Object.assign({}, base, over, { title: pitcher.name });
+    return Object.assign({ levelIndex: CH.level - 1, level, pitcher, mission }, challengeSeeds(dateStr));
+  }
+
+  // 연속 타석 안타 최대 길이
+  function hitStreak(atBatLog) {
+    let best = 0;
+    let cur = 0;
+    for (const o of atBatLog) {
+      cur = HIT_RESULTS[o] ? cur + 1 : 0;
+      best = Math.max(best, cur);
+    }
+    return best;
+  }
+
+  function missionStat(stat, stats, atBatLog) {
+    switch (stat) {
+      case 'extraBases':
+        return stats.doubles + stats.homers;
+      case 'hitStreak':
+        return hitStreak(atBatLog);
+      case 'firstHit':
+        return atBatLog.length && HIT_RESULTS[atBatLog[0]] ? 1 : 0;
+      default:
+        return stats[stat] || 0;
+    }
+  }
+
+  // 미션 진행: { value, done, failed }. min형은 도중에 달성 확정, max형은 넘으면 실패 확정·끝나야 달성
+  // firstHit은 첫 타석이 끝나면 확정
+  function missionProgress(mission, stats, atBatLog, finished) {
+    const value = missionStat(mission.stat, stats, atBatLog);
+    if (mission.max != null) {
+      const failed = value > mission.max;
+      return { value, done: !!finished && !failed, failed };
+    }
+    const done = value >= mission.min;
+    const decided = mission.stat === 'firstHit' ? atBatLog.length > 0 : !!finished;
+    return { value, done, failed: !done && decided };
+  }
+
+  // opts: { levelIndex, level?, mode: 'normal'|'challenge', pitchSeed, judgeSeed, mission?, config?, judgeFn? }
+  // level을 주면 LEVELS 대신 사용 (챌린지의 오늘의 투수)
   function createGame(opts) {
     const C = opts.config || BB.CONFIG;
-    const level = C.LEVELS[opts.levelIndex];
+    const level = opts.level || C.LEVELS[opts.levelIndex];
     const pitchRng = BB.createRng(opts.pitchSeed);
     const judgeRng = BB.createRng(opts.judgeSeed);
     const pitcher = BB.createPitcher(level, pitchRng, C);
@@ -37,6 +90,7 @@
       level,
       levelIndex: opts.levelIndex,
       mode: opts.mode || 'normal',
+      mission: opts.mission || null, // 챌린지 미션
       playerName: opts.playerName || '', // 표시용
       bats: opts.bats === 'L' ? 'L' : 'R', // 표시용: 우타(R) / 좌타(L)
       phase: 'AT_BAT_INTRO',
@@ -103,8 +157,16 @@
         return g.stats.hits / C.AT_BATS_PER_GAME;
       },
 
+      missionProgress() {
+        return g.mission ? missionProgress(g.mission, g.stats, g.atBatLog, g.phase === 'GAME_OVER') : null;
+      },
+
       summary() {
         return Object.assign({}, g.stats, {
+          atBatLog: g.atBatLog.slice(), // 타석별 결과 (HOMERUN/DOUBLE/SINGLE/OUT_BIP/STRIKEOUT)
+          mission: g.mission,
+          missionDone: g.mission ? missionProgress(g.mission, g.stats, g.atBatLog, true).done : false,
+          pitcherName: g.mode === 'challenge' ? g.level.title : null,
           avg: g.finalAverage(),
           totalPitches: g.totalPitches,
           levelIndex: g.levelIndex,
@@ -240,7 +302,7 @@
     return g;
   }
 
-  const api = { createGame, formatAvg, challengeSeeds };
+  const api = { createGame, formatAvg, challengeSeeds, challengeSetup, missionProgress, hitStreak };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);
