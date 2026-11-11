@@ -340,8 +340,8 @@ test('같은 이름 재플레이 시 통산 타율 누적 (3/9 + 6/9 → 9/18)',
   const p = r.record.players['홍길동'];
   assert.deepEqual([p.hits, p.atBats, p.games], [9, 18, 2]);
 });
-test('해제 기준: Lv.1은 .400(4안타), Lv.2는 .300(3안타). 이후 낮은 타율이어도 유지', () => {
-  assert.deepEqual(CONFIG.UNLOCK_AVG, [0.4, 0.3]);
+test('해제 기준: 모든 레벨 .400(4안타), 3안타는 미달. 이후 낮은 타율이어도 유지', () => {
+  assert.deepEqual(CONFIG.UNLOCK_AVG, [0.4, 0.4]);
   let r = play(withPlayers('a'), 'a', 0, 3); // .333: Lv.1 기준 미달
   assert.equal(r.record.players.a.unlocked[1], false);
   assert.equal(r.unlockedLevel, null);
