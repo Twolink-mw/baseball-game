@@ -21,6 +21,9 @@
 
     // 구속
     SPEED_JITTER: 3, // 표시 구속 랜덤 폭(±)
+    // 구속(km/h) → 공 비행 시간(초). 모든 레벨 공통이라 같은 구속이면 같은 속도로 날아온다.
+    // 사이 값은 직선 보간, 표 밖은 양 끝 값. (각 레벨 직구 기준: 140=1.2초, 150=0.9초, 160=0.6초)
+    SPEED_TO_FLIGHT: [[130, 1.5], [140, 1.2], [150, 0.9], [160, 0.6], [170, 0.3]],
 
     // 구종: 구속 보정과 공개 구간 휨(논리 px, 렌더러용)
     PITCH_TYPES: {
@@ -32,19 +35,19 @@
 
     LEVELS: [
       {
-        id: 1, name: 'Lv.1', baseSpeed: 140, flightSec: 1.2, revealSec: 0.6,
+        id: 1, name: 'Lv.1', baseSpeed: 140, revealSec: 0.6,
         pitchMix: { '직구': 70, '투심': 30 },
         ai: 'random',
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', baseSpeed: 150, flightSec: 0.9, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
+        id: 2, name: 'Lv.2', baseSpeed: 150, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
         pitchMix: { '직구': 50, '투심': 20, '슬라이더': 30 },
         ai: 'weak',
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
-        id: 3, name: 'Lv.3', baseSpeed: 160, flightSec: 0.6, revealSec: 0.32,
+        id: 3, name: 'Lv.3', baseSpeed: 160, revealSec: 0.36, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
         pitchMix: { '직구': 40, '투심': 15, '슬라이더': 25, '커브': 20 },
         ai: 'adaptive',
         adjacent: { FOUL: 20, OUT_BIP: 30, SWING_MISS: 50 },

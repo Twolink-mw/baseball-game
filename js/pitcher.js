@@ -25,6 +25,20 @@
     return w;
   }
 
+  // 구속 → 비행 시간 (SPEED_TO_FLIGHT 표를 직선 보간, 표 밖은 양 끝 값)
+  function flightForSpeed(speed, config) {
+    const T = (config || CONFIG).SPEED_TO_FLIGHT;
+    if (speed <= T[0][0]) return T[0][1];
+    for (let i = 1; i < T.length; i++) {
+      if (speed <= T[i][0]) {
+        const [s0, f0] = T[i - 1];
+        const [s1, f1] = T[i];
+        return f0 + ((f1 - f0) * (speed - s0)) / (s1 - s0);
+      }
+    }
+    return T[T.length - 1][1];
+  }
+
   // 투구 시작 시점에 코스를 확정한다. 사용자의 현재 클릭은 보지 않는다.
   function createPitcher(level, rng, config) {
     const C = config || CONFIG;
@@ -43,7 +57,7 @@
           cell: indexCell(idx),
           type,
           speed,
-          flightSec: level.flightSec * (level.baseSpeed / speed),
+          flightSec: flightForSpeed(speed, C),
           revealSec: level.revealSec,
         };
       },
@@ -54,7 +68,7 @@
     };
   }
 
-  const api = { createPitcher, cellWeights, cellIndex, indexCell };
+  const api = { createPitcher, flightForSpeed, cellWeights, cellIndex, indexCell };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { CONFIG } = require('../js/config.js');
 const { createRng, hashString } = require('../js/rng.js');
-const { createPitcher, cellIndex } = require('../js/pitcher.js');
+const { createPitcher, flightForSpeed, cellIndex } = require('../js/pitcher.js');
 const { cellDistance, timingGrade, judge } = require('../js/judge.js');
 const { createGame, formatAvg, challengeSeeds } = require('../js/game.js');
 const S = require('../js/storage.js');
@@ -184,13 +184,28 @@ test('D≥2 → 항상 헛스윙, 클릭 없음 → 루킹', () => {
 });
 
 section('투수 AI');
+test('구속표: 같은 구속이면 레벨과 관계없이 같은 비행 시간, 느릴수록 오래 걸림', () => {
+  assert.equal(flightForSpeed(140), 1.2);
+  assert.equal(flightForSpeed(150), 0.9);
+  assert.equal(flightForSpeed(160), 0.6);
+  assert.ok(Math.abs(flightForSpeed(145) - 1.05) < 1e-12, '사이 값 직선 보간');
+  assert.equal(flightForSpeed(100), 1.5, '표 밖은 끝 값');
+  assert.equal(flightForSpeed(200), 0.3);
+  for (let s = 130; s < 170; s++) assert.ok(flightForSpeed(s) > flightForSpeed(s + 1));
+  // Lv.3 커브(약 140km)는 Lv.1 직구 140km와 같은 속도
+  const lv3 = createPitcher(CONFIG.LEVELS[2], createRng(9));
+  for (let k = 0; k < 300; k++) {
+    const p = lv3.nextPitch();
+    if (p.speed === 140) assert.equal(p.flightSec, 1.2);
+  }
+});
 CONFIG.LEVELS.forEach((level, i) => {
-  test(level.name + ': 비행 시간 공식, 공개 시간, 구속 범위', () => {
+  test(level.name + ': 구속표대로 비행 시간, 공개 시간, 구속 범위', () => {
     const p = createPitcher(level, createRng(300 + i));
     for (let k = 0; k < 500; k++) {
       const pitch = p.nextPitch();
       assert.equal(pitch.revealSec, level.revealSec);
-      assert.ok(Math.abs(pitch.flightSec - level.flightSec * (level.baseSpeed / pitch.speed)) < 1e-12);
+      assert.ok(Math.abs(pitch.flightSec - flightForSpeed(pitch.speed)) < 1e-12);
       assert.ok(pitch.type in level.pitchMix, '레벨에 없는 구종 ' + pitch.type);
       const base = level.baseSpeed + CONFIG.PITCH_TYPES[pitch.type].speedDelta;
       assert.ok(Math.abs(pitch.speed - base) <= CONFIG.SPEED_JITTER, '구속 범위 밖 ' + pitch.speed);
