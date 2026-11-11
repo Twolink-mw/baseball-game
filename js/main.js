@@ -4,6 +4,12 @@
 
   const BB = global.BB;
   const C = BB.CONFIG;
+  // 구종 구속 차이 비교: index.html?gap=mlb
+  try {
+    BB.applySpeedGap(C, new URLSearchParams(global.location.search).get('gap'));
+  } catch (e) {
+    /* 주소 해석 실패 시 기본값 */
+  }
   const canvas = document.getElementById('game');
   const renderer = BB.createRenderer(canvas);
   const audio = BB.createAudio();

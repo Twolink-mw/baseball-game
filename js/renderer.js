@@ -406,7 +406,7 @@
       roundRect(16, 16, 280, 204, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.72)';
       ctx.fill();
-      const title = g.mode === 'challenge' ? '오늘의 챌린지 ' + view.today.slice(5).replace('-', '/') : g.level.name + ' ' + g.level.baseSpeed + 'km';
+      const title = g.mode === 'challenge' ? '오늘의 챌린지 ' + view.today.slice(5).replace('-', '/') : g.level.name + ' ' + g.level.title + ' ' + g.level.baseSpeed + 'km';
       text(g.playerName + (g.bats === 'L' ? ' (좌타)' : ' (우타)'), 32, 40, 22, '#fff', 'left', 'bold');
       text(title, 32, 70, 18, '#ffd34d', 'left', 'bold');
       text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
@@ -561,7 +561,7 @@
         ctx.lineWidth = 2;
         ctx.stroke();
         text(lv.name, x + cw / 2, y + 44, 36, unlocked ? '#ffd34d' : '#888', 'center', 'bold');
-        text(lv.baseSpeed + 'km/h', x + cw / 2, y + 88, 24, unlocked ? '#fff' : '#888', 'center');
+        text(lv.title + ' · ' + lv.baseSpeed + 'km/h', x + cw / 2, y + 88, 24, unlocked ? '#fff' : '#888', 'center');
         const best = rec.best[i];
         if (unlocked) {
           text('최고 타율 ' + (best === null ? '-' : BB.formatAvg(best)), x + cw / 2, y + 128, 20, '#dde', 'center');
@@ -590,6 +590,10 @@
       hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
 
       text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기', 640, 600, 16, '#bcd', 'center');
+      if (C.speedGap) {
+        const d = C.PITCH_TYPES;
+        text('비교 모드(' + C.speedGap + '): 구종 구속 차이 투심 ' + d['투심'].speedDelta + ' · 슬라이더 ' + d['슬라이더'].speedDelta + ' · 커브 ' + d['커브'].speedDelta + ' · 체인지업 ' + d['체인지업'].speedDelta + 'km', 640, 628, 16, '#ff9f5a', 'center', 'bold');
+      }
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
       muteButton(view, L.width - 150, 16, 130, 44);
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });

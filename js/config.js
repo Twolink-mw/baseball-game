@@ -22,33 +22,39 @@
     // 구속
     SPEED_JITTER: 3, // 표시 구속 랜덤 폭(±)
     // 구속(km/h) → 공 비행 시간(초). 모든 레벨 공통이라 같은 구속이면 같은 속도로 날아온다.
-    // 사이 값은 직선 보간, 표 밖은 양 끝 값. (각 레벨 직구 기준: 140=1.2초, 150=0.9초, 160=0.6초)
+    // 사이 값은 직선 보간, 표 밖은 양 끝 값. (직구 기준: Lv.1 145km=1.05초, Lv.2 152km=0.84초, Lv.3 160km=0.6초)
     SPEED_TO_FLIGHT: [[130, 1.5], [140, 1.2], [150, 0.9], [160, 0.6], [170, 0.3]],
 
-    // 구종: 구속 보정과 공개 구간 휨(논리 px, 렌더러용)
+    // 구종: 구속 보정(km/h, 직구 대비)과 공개 구간 휨(논리 px, 렌더러용)
     PITCH_TYPES: {
       '직구': { speedDelta: 0, bend: { x: 0, y: 0 } },
       '투심': { speedDelta: -3, bend: { x: -16, y: 0 } },
       '슬라이더': { speedDelta: -10, bend: { x: 42, y: 6 } },
       '커브': { speedDelta: -20, bend: { x: 8, y: 56 } },
+      '체인지업': { speedDelta: -14, bend: { x: -10, y: 16 } }, // 직구처럼 오다가 살짝 가라앉으며 바깥으로
+    },
+    // 구종 구속 차이 비교용 (테스트 후 결정). index.html?gap=mlb 로 열면 아래 값으로 바뀜
+    SPEED_GAP_PRESETS: {
+      mlb: { '투심': -3, '슬라이더': -14, '커브': -24, '체인지업': -14 }, // 메이저리그 평균 구속 차이
     },
 
+    // 직구 기준 구속은 메이저리그 기준: 기교파 선발(90mph) / 리그 평균(94.5mph) / 정상급 마무리(99.5mph)
     LEVELS: [
       {
-        id: 1, name: 'Lv.1', baseSpeed: 140, revealSec: 0.6,
-        pitchMix: { '직구': 70, '투심': 30 },
+        id: 1, name: 'Lv.1', title: '기교파', baseSpeed: 145, revealSec: 0.6,
+        pitchMix: { '직구': 55, '투심': 25, '체인지업': 20 },
         ai: 'random',
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', baseSpeed: 150, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
-        pitchMix: { '직구': 50, '투심': 20, '슬라이더': 30 },
+        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
+        pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
-        id: 3, name: 'Lv.3', baseSpeed: 160, revealSec: 0.36, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
-        pitchMix: { '직구': 40, '투심': 15, '슬라이더': 25, '커브': 20 },
+        id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
+        pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
         adjacent: { FOUL: 20, OUT_BIP: 30, SWING_MISS: 50 },
       },
@@ -107,7 +113,18 @@
     LEADERBOARD_PAGE: 8, // 타자 기록 화면 한 페이지 인원
   };
 
-  const api = { CONFIG };
+  // 구종 구속 차이 프리셋 적용 (비교 테스트용). 적용했으면 true
+  function applySpeedGap(config, name) {
+    const preset = config.SPEED_GAP_PRESETS[name];
+    if (!preset) return false;
+    for (const [type, delta] of Object.entries(preset)) {
+      if (config.PITCH_TYPES[type]) config.PITCH_TYPES[type].speedDelta = delta;
+    }
+    config.speedGap = name;
+    return true;
+  }
+
+  const api = { CONFIG, applySpeedGap };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);
