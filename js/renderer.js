@@ -426,29 +426,52 @@
     const LOG_LABEL = { HOMERUN: '홈런', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹' };
     const LOG_COLOR = { HOMERUN: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a' };
 
-    // 이번 타석 기록. 새 타석의 첫 공이 날아오기 전까지는 직전 타석을 보여준다
-    function pitchLogFor(g) {
-      const cur = g.history.filter((h) => h.atBat === g.atBat);
-      if (cur.length || g.atBat === 1 || (g.phase !== 'AT_BAT_INTRO' && g.phase !== 'PITCH_WINDUP')) {
-        return { title: '이번 타석', list: cur };
-      }
-      return { title: '직전 타석', list: g.history.filter((h) => h.atBat === g.atBat - 1) };
+    // 타석 결과 한마디 (직전 타석 제목용)
+    function atBatOutcomeLabel(list) {
+      const last = list[list.length - 1];
+      if (!last) return '';
+      if (last.result === 'SWING_MISS' || last.result === 'LOOKING') return '삼진';
+      return LOG_LABEL[last.result];
     }
 
+    function logRow(e, x, w, ry, size, dim) {
+      ctx.globalAlpha = dim ? 0.75 : 1;
+      ctx.beginPath();
+      ctx.arc(x + 18, ry, size === 14 ? 9 : 8, 0, Math.PI * 2);
+      ctx.fillStyle = LOG_COLOR[e.result];
+      ctx.fill();
+      text(String(e.n), x + 18, ry + 1, size - 2, '#111', 'center', 'bold');
+      text(e.type, x + 34, ry, size, '#fff', 'left', 'bold');
+      text(String(e.speed), x + 130, ry, size, '#cde', 'right');
+      text(LOG_LABEL[e.result], x + w - 10, ry, size, LOG_COLOR[e.result], 'right', 'bold');
+      ctx.globalAlpha = 1;
+    }
+
+    // 위: 이번 타석(미니 존 + 목록), 아래: 직전 타석(다음 타석이 끝날 때까지 유지)
     function drawPitchLog(g) {
-      const { title, list } = pitchLogFor(g);
+      const cur = g.history.filter((h) => h.atBat === g.atBat);
+      const prev = g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
       const x = 1066;
       const y = 150;
       const w = 200;
+      const bottom = 640; // 오른쪽 아래 버튼 위까지
       const cs = 34; // 미니 존 칸 크기
       const zx = x + (w - cs * 3) / 2;
       const zy = y + 34;
       const rowY = zy + cs * 3 + 14;
-      const h = rowY - y + Math.max(1, list.length) * 24 + 8;
+      const CUR_H = 24;
+      const PREV_H = 21;
+      // 줄 수가 넘치면 직전 타석은 마지막 몇 줄만
+      const curRows = Math.max(1, cur.length);
+      let prevRows = prev.length;
+      const room = bottom - 8 - (rowY + curRows * CUR_H) - (prev.length ? 30 : 0);
+      if (prevRows * PREV_H > room) prevRows = Math.max(0, Math.floor(room / PREV_H));
+      const prevTop = rowY + curRows * CUR_H + 6;
+      const h = (prev.length ? prevTop + 26 + prevRows * PREV_H : rowY + curRows * CUR_H) - y + 8;
       roundRect(x, y, w, h, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.85)';
       ctx.fill();
-      text(title, x + 12, y + 18, 15, '#9ab', 'left', 'bold');
+      text(g.atBat + '번째 타석', x + 12, y + 18, 15, '#9ab', 'left', 'bold');
       // 미니 존: 공이 들어온 칸에 투구 번호
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 1;
@@ -461,7 +484,7 @@
         ctx.stroke();
       }
       const center = (c) => ({ x: zx + cs * (c.col + 0.5), y: zy + cs * (c.row + 0.5) });
-      const last = list[list.length - 1];
+      const last = cur[cur.length - 1];
       if (last && last.clickCell) {
         // 직전 투구에서 휘두른 칸
         const p = center(last.clickCell);
@@ -471,7 +494,7 @@
       }
       const perCell = {};
       const OFFS = [[0, 0], [-8, -8], [8, 8], [8, -8], [-8, 8]];
-      list.forEach((e) => {
+      cur.forEach((e) => {
         const k = e.cell.row * 3 + e.cell.col;
         const o = OFFS[(perCell[k] = (perCell[k] || 0) + 1) - 1] || [0, 0];
         const p = center(e.cell);
@@ -481,19 +504,22 @@
         ctx.fill();
         text(String(e.n), p.x + o[0], p.y + o[1] + 1, 12, '#111', 'center', 'bold');
       });
-      // 목록
-      if (!list.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 12, 14, '#789', 'center');
-      list.forEach((e, i) => {
-        const ry = rowY + i * 24 + 12;
+      if (!cur.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 12, 14, '#789', 'center');
+      cur.forEach((e, i) => logRow(e, x, w, rowY + i * CUR_H + 12, 14, false));
+      // 직전 타석
+      if (prev.length) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(x + 18, ry, 9, 0, Math.PI * 2);
-        ctx.fillStyle = LOG_COLOR[e.result];
-        ctx.fill();
-        text(String(e.n), x + 18, ry + 1, 12, '#111', 'center', 'bold');
-        text(e.type, x + 34, ry, 14, '#fff', 'left', 'bold');
-        text(String(e.speed), x + 130, ry, 14, '#cde', 'right');
-        text(LOG_LABEL[e.result], x + w - 10, ry, 14, LOG_COLOR[e.result], 'right', 'bold');
-      });
+        ctx.moveTo(x + 10, prevTop);
+        ctx.lineTo(x + w - 10, prevTop);
+        ctx.stroke();
+        text('직전 타석', x + 12, prevTop + 14, 14, '#9ab', 'left', 'bold');
+        const out = atBatOutcomeLabel(prev);
+        text(out, x + w - 10, prevTop + 14, 14, out === '삼진' ? '#ff8a8a' : out === '범타' ? '#9aa7b8' : '#ffd34d', 'right', 'bold');
+        const shown = prev.slice(prev.length - prevRows);
+        shown.forEach((e, i) => logRow(e, x, w, prevTop + 26 + i * PREV_H + 10, 13, true));
+      }
     }
 
     function drawBubble(g) {
@@ -593,6 +619,7 @@
         hits = [];
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, L.width, L.height);
+        drawPitchLog(g); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
         text('일시정지', 640, 260, 56, '#fff', 'center', 'bold');
         button('resume', 640 - 210, 340, 200, 60, '계속하기', { primary: true });
         button('menu', 640 + 10, 340, 200, 60, '메뉴로');
