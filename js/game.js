@@ -37,6 +37,7 @@
       level,
       levelIndex: opts.levelIndex,
       mode: opts.mode || 'normal',
+      playerName: opts.playerName || '', // 표시용
       phase: 'AT_BAT_INTRO',
       time: 0,
       phaseStart: 0,

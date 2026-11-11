@@ -9,6 +9,20 @@
   <body>
     <canvas id="game" width="1280" height="720"></canvas>
 
+    <!-- 타자 이름 입력 대화상자 -->
+    <div id="name-dialog" class="dialog" hidden>
+      <form id="name-form" class="dialog-box" autocomplete="off" novalidate>
+        <h2>타자 이름</h2>
+        <input id="name-input" type="text" maxlength="8" placeholder="이름 (1~8자)" enterkeyhint="done" spellcheck="false" />
+        <p id="name-error" class="dialog-error" aria-live="polite"></p>
+        <div id="name-list" class="chips"></div>
+        <div class="dialog-actions">
+          <button type="button" id="name-cancel">취소</button>
+          <button type="submit" class="primary">확인</button>
+        </div>
+      </form>
+    </div>
+
     <!-- ES module 대신 일반 script (file://에서도 동작). 순서 중요 -->
     <script src="./js/config.js"></script>
     <script src="./js/rng.js"></script>

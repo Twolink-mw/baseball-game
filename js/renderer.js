@@ -264,17 +264,18 @@
     }
 
     function drawHud(g, view) {
-      roundRect(16, 16, 280, 176, 12);
+      roundRect(16, 16, 280, 204, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.72)';
       ctx.fill();
       const title = g.mode === 'challenge' ? '오늘의 챌린지 ' + view.today.slice(5).replace('-', '/') : g.level.name + ' ' + g.level.baseSpeed + 'km';
-      text(title, 32, 40, 20, '#ffd34d', 'left', 'bold');
-      text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 70, 18);
-      text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 98, 18);
-      text('타율 ' + BB.formatAvg(g.currentAverage()), 32, 126, 18);
-      text('S', 32, 156, 18, '#fff', 'left', 'bold');
-      for (let i = 0; i < C.MAX_STRIKES - 1; i++) lamp(60 + i * 26, 156, i < g.strikes, '#f2c230');
-      text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 156, 16, '#ccc', 'right');
+      text(g.playerName, 32, 40, 22, '#fff', 'left', 'bold');
+      text(title, 32, 70, 18, '#ffd34d', 'left', 'bold');
+      text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
+      text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18);
+      text('타율 ' + BB.formatAvg(g.currentAverage()), 32, 154, 18);
+      text('S', 32, 186, 18, '#fff', 'left', 'bold');
+      for (let i = 0; i < C.MAX_STRIKES - 1; i++) lamp(60 + i * 26, 186, i < g.strikes, '#f2c230');
+      text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 186, 16, '#ccc', 'right');
     }
 
     function drawBubble(g) {
@@ -339,10 +340,27 @@
       bg.addColorStop(1, '#1d4d32');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, L.width, L.height);
-      text('타자 시점 야구', 640, 90, 60, '#fff', 'center', 'bold');
-      text('코스가 보이면, 공이 도착하는 순간에 맞춰 누르세요', 640, 150, 22, '#cfe', 'center');
+      text('타자 시점 야구', 640, 56, 52, '#fff', 'center', 'bold');
+      text('코스가 보이면, 공이 도착하는 순간에 맞춰 누르세요', 640, 104, 20, '#cfe', 'center');
 
-      const rec = view.record;
+      // 현재 타자 배너
+      const bx = 640 - 330;
+      const by = 128;
+      roundRect(bx, by, 660, 54, 12);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fill();
+      const p = view.player;
+      if (p) {
+        const career = BB.careerAvg(p);
+        text('타자', bx + 20, by + 27, 18, '#9ab', 'left');
+        text(p.name, bx + 68, by + 27, 24, '#ffd34d', 'left', 'bold');
+        text('통산 ' + (career === null ? '-' : BB.formatAvg(career)) + ' (' + p.atBats + '타수)', bx + 270, by + 27, 18, '#dde', 'left');
+      } else {
+        text('타자 이름을 정해 주세요', bx + 20, by + 27, 20, '#ffd34d', 'left', 'bold');
+      }
+      button('changeBatter', bx + 660 - 140, by + 7, 130, 40, p ? '타자 변경' : '이름 입력', { size: 18, primary: !p });
+
+      const rec = view.playerData;
       const cw = 300;
       const gap = 40;
       const x0 = (L.width - (cw * 3 + gap * 2)) / 2;
@@ -386,7 +404,55 @@
       hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
 
       text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C', 640, 600, 16, '#bcd', 'center');
+      button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
+    }
+
+    // 타자 기록(순위표)
+    function drawPlayers(view) {
+      ctx.fillStyle = '#0f1c30';
+      ctx.fillRect(0, 0, L.width, L.height);
+      text('타자 기록', 640, 56, 36, '#fff', 'center', 'bold');
+      const list = view.ranking;
+      const per = C.LEADERBOARD_PAGE;
+      const pages = Math.max(1, Math.ceil(list.length / per));
+      const page = Math.min(view.page, pages - 1);
+      const cols = [
+        ['순위', 90, 'center'], ['이름', 140, 'left'], ['통산 타율', 430, 'center'], ['타수', 540, 'center'],
+        ['Lv.1 최고', 650, 'center'], ['Lv.2 최고', 760, 'center'], ['Lv.3 최고', 870, 'center'], ['게임', 970, 'center'],
+      ];
+      for (const [label, x, align] of cols) text(label, x, 112, 17, '#9ab', align, 'bold');
+      if (!list.length) {
+        text('아직 등록된 타자가 없습니다', 640, 300, 24, '#ccd', 'center');
+      }
+      const avgOr = (x) => (x === null ? '-' : BB.formatAvg(x));
+      list.slice(page * per, page * per + per).forEach((p, i) => {
+        const y = 140 + i * 54;
+        const isCurrent = view.record.current === p.key;
+        roundRect(60, y, 1000, 46, 8);
+        ctx.fillStyle = isCurrent ? 'rgba(255,211,77,0.18)' : 'rgba(255,255,255,0.06)';
+        ctx.fill();
+        if (isCurrent) {
+          ctx.strokeStyle = 'rgba(255,211,77,0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        const cy = y + 23;
+        const vals = [
+          String(page * per + i + 1), p.name, avgOr(p.career), String(p.atBats),
+          avgOr(p.best[0]), avgOr(p.best[1]), avgOr(p.best[2]), String(p.games),
+        ];
+        vals.forEach((v, k) => text(v, cols[k][1], cy, k === 1 || k === 2 ? 22 : 19, k === 2 ? '#ffd34d' : '#fff', cols[k][2], k <= 2 ? 'bold' : 'normal'));
+        hits.push({ id: 'player:' + p.key, x: 60, y, w: 1000, h: 46 });
+        button('delete:' + p.key, 1080, y + 3, 90, 40, '삭제', { size: 16 });
+      });
+      text('행을 누르면 그 타자로 변경합니다', 640, 590, 16, '#9ab', 'center');
+      if (pages > 1) {
+        button('page:prev', 640 - 170, 640, 80, 50, '◀', { disabled: page === 0 });
+        text(page + 1 + ' / ' + pages, 640, 665, 20, '#fff', 'center');
+        button('page:next', 640 + 90, 640, 80, 50, '▶', { disabled: page >= pages - 1 });
+      }
+      button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
     }
 
     function drawResult(view) {
@@ -395,10 +461,17 @@
       ctx.fillStyle = '#0f1c30';
       ctx.fillRect(0, 0, L.width, L.height);
       const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
-      text(title, 640, 70, 30, '#cde', 'center', 'bold');
-      text('타율', 640, 140, 26, '#aaa', 'center');
-      text(BB.formatAvg(s.avg), 640, 220, 110, '#ffd34d', 'center', 'bold');
-      let y = 310;
+      text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
+      text('이번 타율', 640, 118, 24, '#aaa', 'center');
+      text(BB.formatAvg(s.avg), 640, 196, 104, '#ffd34d', 'center', 'bold');
+      let y = 280;
+      const avgOr = (x) => (x === null ? '-' : BB.formatAvg(x));
+      if (s.mode === 'normal') {
+        text('통산 타율 ' + avgOr(r.careerBefore) + ' → ' + avgOr(r.careerAfter) + '  (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, y, 24, '#fff', 'center', 'bold');
+      } else {
+        text('챌린지는 통산 타율에 반영되지 않습니다', 640, y, 20, '#9ab', 'center');
+      }
+      y += 50;
       if (r.newRecord) {
         text('NEW RECORD', 640, y, 34, '#ff6b6b', 'center', 'bold');
         y += 46;
@@ -414,7 +487,7 @@
 
       const bw = 200;
       const by = 600;
-      const canNext = s.mode === 'normal' && s.levelIndex + 1 < C.LEVELS.length && view.record.unlocked[s.levelIndex + 1];
+      const canNext = s.mode === 'normal' && s.levelIndex + 1 < C.LEVELS.length && r.player.unlocked[s.levelIndex + 1];
       const buttons = [['retry', '다시하기', true]];
       if (canNext) buttons.push(['next', '다음 레벨', false]);
       buttons.push(['menu', '메뉴로', false]);
@@ -429,6 +502,7 @@
       if (view.screen === 'title') drawTitle(view);
       else if (view.screen === 'game') drawGame(view);
       else if (view.screen === 'result') drawResult(view);
+      else if (view.screen === 'players') drawPlayers(view);
       return hits;
     }
 

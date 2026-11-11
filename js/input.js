@@ -38,6 +38,8 @@
 
     global.addEventListener('keydown', (e) => {
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      // 이름 입력 중에는 게임 키(QWE 등)를 쓰지 않는다
+      if (e.target instanceof HTMLInputElement || (handlers.isBlocked && handlers.isBlocked())) return;
       const cell = KEY_CELLS[e.code];
       if (cell) {
         e.preventDefault();

@@ -6,7 +6,7 @@ const { createRng, hashString } = require('../js/rng.js');
 const { createPitcher, cellIndex } = require('../js/pitcher.js');
 const { cellDistance, timingGrade, judge } = require('../js/judge.js');
 const { createGame, formatAvg, challengeSeeds } = require('../js/game.js');
-const { defaultRecord, validateRecord, mergeRecords, applyGameResult, normalizeRecord } = require('../js/storage.js');
+const S = require('../js/storage.js');
 
 let passed = 0;
 let failed = 0;
@@ -291,80 +291,179 @@ test('문자열 해시는 결정적', () => {
   assert.notEqual(hashString('abc'), hashString('abd'));
 });
 
-section('잠금 해제와 기록');
-test('.300 미만이면 다음 레벨 잠김', () => {
-  const { record, unlockedLevel } = applyGameResult(defaultRecord(), { levelIndex: 0, avg: 2 / 9, mode: 'normal' });
-  assert.equal(record.unlocked[1], false);
-  assert.equal(unlockedLevel, null);
+section('타자 이름');
+test('이름 정규화: 공백 정리, 1~8자', () => {
+  assert.equal(S.normalizeName('  홍  길동 '), '홍 길동');
+  assert.equal(S.normalizeName(''), null);
+  assert.equal(S.normalizeName('   '), null);
+  assert.equal(S.normalizeName('가나다라마바사아'), '가나다라마바사아');
+  assert.equal(S.normalizeName('가나다라마바사아자'), null);
+  assert.equal(S.normalizeName(null), null);
 });
-test('.300 이상이면 해제, 이후 낮은 타율이어도 유지', () => {
-  let r = applyGameResult(defaultRecord(), { levelIndex: 0, avg: 3 / 9, mode: 'normal' });
-  assert.equal(r.record.unlocked[1], true);
-  assert.equal(r.unlockedLevel, 1);
-  r = applyGameResult(r.record, { levelIndex: 0, avg: 0, mode: 'normal' });
-  assert.equal(r.record.unlocked[1], true);
-  assert.equal(r.unlockedLevel, null);
+test('같은 이름 판정: 공백/영문 대소문자 무시', () => {
+  assert.equal(S.playerKey(' Kim  A '), S.playerKey('kim a'));
+  assert.notEqual(S.playerKey('홍길동'), S.playerKey('홍길순'));
 });
-test('최고 타율은 갱신 시에만 변경', () => {
-  let r = applyGameResult(defaultRecord(), { levelIndex: 0, avg: 4 / 9, mode: 'normal' });
-  assert.equal(r.newRecord, true);
-  r = applyGameResult(r.record, { levelIndex: 0, avg: 2 / 9, mode: 'normal' });
-  assert.equal(r.newRecord, false);
-  assert.equal(r.record.best[0], 4 / 9);
-  r = applyGameResult(r.record, { levelIndex: 0, avg: 4 / 9, mode: 'normal' });
-  assert.equal(r.newRecord, false);
-  r = applyGameResult(r.record, { levelIndex: 0, avg: 5 / 9, mode: 'normal' });
-  assert.equal(r.record.best[0], 5 / 9);
+test('ensurePlayer: 새 타자 생성 후 같은 이름이면 기존 타자 재사용', () => {
+  const r = S.ensurePlayer(S.defaultRecord(), '홍길동');
+  assert.equal(r.created, true);
+  assert.equal(r.record.current, r.key);
+  const again = S.ensurePlayer(r.record, ' 홍길동 ');
+  assert.equal(again.created, false);
+  assert.equal(again.key, r.key);
+  assert.equal(Object.keys(again.record.players).length, 1);
+  assert.deepEqual(S.ensurePlayer(r.record, ''), { error: 'invalid' });
 });
-test('챌린지는 해제/최고 타율에 영향 없음, 그날 첫 판만 기록', () => {
-  let r = applyGameResult(defaultRecord(), { levelIndex: 1, avg: 1, mode: 'challenge', date: '2026-11-11' });
-  assert.equal(r.official, true);
-  assert.deepEqual(r.record.unlocked, [true, false, false]);
-  assert.deepEqual(r.record.best, [null, null, null]);
-  assert.deepEqual(r.record.daily, { date: '2026-11-11', avg: 1 });
-  r = applyGameResult(r.record, { levelIndex: 1, avg: 0, mode: 'challenge', date: '2026-11-11' });
-  assert.equal(r.official, false);
-  assert.equal(r.record.daily.avg, 1);
-  r = applyGameResult(r.record, { levelIndex: 1, avg: 0, mode: 'challenge', date: '2026-11-12' });
-  assert.equal(r.official, true);
-  assert.deepEqual(r.record.daily, { date: '2026-11-12', avg: 0 });
+test('MAX_PLAYERS 초과 시 새 타자 거부(기존 타자는 선택 가능)', () => {
+  let rec = S.defaultRecord();
+  for (let i = 0; i < CONFIG.MAX_PLAYERS; i++) rec = S.ensurePlayer(rec, 'p' + i).record;
+  assert.deepEqual(S.ensurePlayer(rec, '새타자'), { error: 'full' });
+  assert.equal(S.ensurePlayer(rec, 'p0').created, false);
 });
 
-section('저장 검증/병합');
+section('타자별 기록과 잠금 해제');
+function withPlayers(...names) {
+  let rec = S.defaultRecord();
+  for (const n of names) rec = S.ensurePlayer(rec, n).record;
+  return rec;
+}
+const play = (rec, key, levelIndex, hits, extra) =>
+  S.applyGameResult(rec, Object.assign({ playerKey: key, levelIndex, hits, atBats: 9, mode: 'normal', date: '2026-11-11' }, extra));
+
+test('같은 이름 재플레이 시 통산 타율 누적 (3/9 + 6/9 → 9/18)', () => {
+  let r = play(withPlayers('홍길동'), '홍길동', 0, 3);
+  assert.equal(r.careerBefore, null);
+  assert.equal(r.careerAfter, 3 / 9);
+  r = play(r.record, '홍길동', 0, 6);
+  assert.equal(r.careerBefore, 3 / 9);
+  assert.equal(r.careerAfter, 0.5);
+  const p = r.record.players['홍길동'];
+  assert.deepEqual([p.hits, p.atBats, p.games], [9, 18, 2]);
+});
+test('.300 미만이면 다음 레벨 잠김, 이상이면 해제, 이후 낮은 타율이어도 유지', () => {
+  let r = play(withPlayers('a'), 'a', 0, 2);
+  assert.equal(r.record.players.a.unlocked[1], false);
+  assert.equal(r.unlockedLevel, null);
+  r = play(r.record, 'a', 0, 3);
+  assert.equal(r.record.players.a.unlocked[1], true);
+  assert.equal(r.unlockedLevel, 1);
+  r = play(r.record, 'a', 0, 0);
+  assert.equal(r.record.players.a.unlocked[1], true);
+  assert.equal(r.unlockedLevel, null);
+});
+test('잠금 해제는 타자별: A의 해제가 B에 영향 없음', () => {
+  const r = play(withPlayers('a', 'b'), 'a', 0, 5);
+  assert.equal(r.record.players.a.unlocked[1], true);
+  assert.equal(r.record.players.b.unlocked[1], false);
+  assert.equal(r.record.players.b.atBats, 0);
+});
+test('최고 타율은 갱신 시에만 변경, 첫 .000은 NEW RECORD 아님', () => {
+  let r = play(withPlayers('a'), 'a', 0, 0);
+  assert.equal(r.newRecord, false);
+  assert.equal(r.record.players.a.best[0], 0);
+  r = play(r.record, 'a', 0, 4);
+  assert.equal(r.newRecord, true);
+  r = play(r.record, 'a', 0, 2);
+  assert.equal(r.newRecord, false);
+  assert.equal(r.record.players.a.best[0], 4 / 9);
+  r = play(r.record, 'a', 0, 4);
+  assert.equal(r.newRecord, false);
+  r = play(r.record, 'a', 0, 5);
+  assert.equal(r.record.players.a.best[0], 5 / 9);
+});
+test('챌린지: 통산/해제/최고 타율 미반영, 타자별 그날 첫 판만 기록', () => {
+  const ch = (rec, key, hits, date) => play(rec, key, 1, hits, { mode: 'challenge', date });
+  let r = ch(withPlayers('a', 'b'), 'a', 9, '2026-11-11');
+  const a = r.record.players.a;
+  assert.equal(r.official, true);
+  assert.deepEqual([a.hits, a.atBats], [0, 0]);
+  assert.deepEqual(a.unlocked, [true, false, false]);
+  assert.deepEqual(a.best, [null, null, null]);
+  assert.deepEqual(a.daily, { date: '2026-11-11', avg: 1 });
+  r = ch(r.record, 'a', 0, '2026-11-11');
+  assert.equal(r.official, false);
+  assert.equal(r.record.players.a.daily.avg, 1);
+  r = ch(r.record, 'b', 0, '2026-11-11');
+  assert.equal(r.official, true, '다른 타자는 같은 날도 첫 판');
+  r = ch(r.record, 'a', 0, '2026-11-12');
+  assert.equal(r.official, true);
+});
+test('순위: 통산 타율 내림차순, 동률이면 타수 많은 순, 타수 0은 맨 아래', () => {
+  let rec = withPlayers('zero', 'low', 'high', 'tieMore', 'tieLess');
+  rec = play(rec, 'low', 0, 1).record;
+  rec = play(rec, 'high', 0, 6).record;
+  rec = play(rec, 'tiemore', 0, 3).record;
+  rec = play(rec, 'tiemore', 0, 3).record;
+  rec = play(rec, 'tieless', 0, 3).record;
+  assert.deepEqual(S.rankPlayers(rec).map((p) => p.key), ['high', 'tiemore', 'tieless', 'low', 'zero']);
+});
+test('타자 삭제: 현재 타자면 선택 해제', () => {
+  const r = S.deletePlayer(withPlayers('a', 'b'), 'b'); // 현재 타자 b
+  assert.deepEqual(Object.keys(r.players), ['a']);
+  assert.equal(r.current, null);
+});
+
+section('저장 검증/병합/이전');
+test('v1 기록 → v2 타자로 이전', () => {
+  const v1 = { v: 1, name: '', unlocked: [true, true, false], best: [0.444, null, null], games: 3, daily: { date: '2026-11-10', avg: 0.3 } };
+  const r = S.normalizeRecord(v1);
+  assert.equal(r.v, 2);
+  const p = r.players[r.current];
+  assert.equal(p.name, '타자1');
+  assert.deepEqual(p.unlocked, [true, true, false]);
+  assert.deepEqual(p.best, [0.444, null, null]);
+  assert.deepEqual([p.hits, p.atBats, p.games], [0, 0, 3]);
+  assert.deepEqual(S.normalizeRecord({ v: 1, unlocked: [true, false, false], best: [null, null, null], games: 0 }).players, {});
+});
 test('validateRecord: 잘못된 형식 거부', () => {
-  assert.equal(validateRecord(null), null);
-  assert.equal(validateRecord('x'), null);
-  assert.equal(validateRecord({ v: 2 }), null);
-  const ok = defaultRecord();
-  assert.notEqual(validateRecord(ok), null);
-  assert.equal(validateRecord(Object.assign({}, ok, { unlocked: [true, 'y', false] })), null);
-  assert.equal(validateRecord(Object.assign({}, ok, { best: [2, null, null] })), null);
-  assert.equal(validateRecord(Object.assign({}, ok, { games: -1 })), null);
-  assert.equal(validateRecord(Object.assign({}, ok, { daily: { date: 'nope', avg: 0.1 } })), null);
+  assert.equal(S.validateRecord(null), null);
+  assert.equal(S.validateRecord({ v: 3, players: {} }), null);
+  const ok = play(withPlayers('a'), 'a', 0, 3).record;
+  assert.notEqual(S.validateRecord(JSON.parse(JSON.stringify(ok))), null);
+  const bad = (mut) => {
+    const x = JSON.parse(JSON.stringify(ok));
+    mut(x.players.a);
+    return S.validateRecord(x);
+  };
+  assert.equal(bad((p) => (p.name = '')), null);
+  assert.equal(bad((p) => (p.unlocked = [true, 'y', false])), null);
+  assert.equal(bad((p) => (p.best = [2, null, null])), null);
+  assert.equal(bad((p) => (p.hits = 10)), null, '안타 > 타수');
+  assert.equal(bad((p) => (p.daily = { date: 'x', avg: 0.1 })), null);
 });
 test('normalizeRecord: 깨진 데이터에서 살릴 수 있는 필드만 살림', () => {
-  const r = normalizeRecord({ unlocked: [true, true, 'x'], best: [0.5, 'a'], games: 3.5, name: '가나다라마바사아자차' });
-  assert.deepEqual(r.unlocked, [true, true, false]);
-  assert.deepEqual(r.best, [0.5, null, null]);
-  assert.equal(r.games, 0);
-  assert.equal(r.name.length, CONFIG.NAME_MAX);
+  const r = S.normalizeRecord({
+    v: 2, current: 'nobody',
+    players: { x: { name: '  A ', unlocked: [true, true, 'x'], best: [0.5, 'a'], hits: 3, atBats: 'n', games: 1.5 }, y: { name: '' } },
+  });
+  assert.deepEqual(Object.keys(r.players), ['a']);
+  const p = r.players.a;
+  assert.equal(p.name, 'A');
+  assert.deepEqual(p.unlocked, [true, true, false]);
+  assert.deepEqual(p.best, [0.5, null, null]);
+  assert.deepEqual([p.hits, p.atBats, p.games], [0, 0, 0]);
+  assert.equal(r.current, null);
 });
-test('mergeRecords: 최고 타율 큰 값, 해제 OR, games 큰 값, daily 늦은 날짜, 이름/설정 유지', () => {
-  const a = Object.assign(defaultRecord(), {
-    name: 'A', unlocked: [true, true, false], best: [0.333, null, null], games: 4,
-    daily: { date: '2026-11-10', avg: 0.2 }, settings: { muted: true, padSide: 'left' },
-  });
-  const b = Object.assign(defaultRecord(), {
-    name: 'B', unlocked: [true, false, true], best: [0.222, 0.444, null], games: 9,
-    daily: { date: '2026-11-11', avg: 0.1 },
-  });
-  const m = mergeRecords(a, b);
-  assert.deepEqual(m.unlocked, [true, true, true]);
-  assert.deepEqual(m.best, [0.333, 0.444, null]);
-  assert.equal(m.games, 9);
-  assert.deepEqual(m.daily, { date: '2026-11-11', avg: 0.1 });
-  assert.equal(m.name, 'A');
-  assert.deepEqual(m.settings, { muted: true, padSide: 'left' });
+test('mergeRecords: 타자별 병합 + 없는 타자 추가 + 현재 타자/설정 유지', () => {
+  let a = withPlayers('공통', 'A만');
+  a = play(a, '공통', 0, 3).record; // 3/9, Lv.2 해제
+  a.settings.muted = true;
+  a.players['공통'].daily = { date: '2026-11-10', avg: 0.2 };
+  let b = withPlayers('공통', 'B만');
+  b = play(b, '공통', 1, 1).record;
+  b = play(b, '공통', 0, 2).record; // 통산 3/18
+  b.players['공통'].unlocked[2] = true;
+  b.players['공통'].daily = { date: '2026-11-11', avg: 0.1 };
+  const m = S.mergeRecords(a, b);
+  const p = m.players['공통'];
+  assert.deepEqual(Object.keys(m.players).sort(), ['a만', 'b만', '공통'].sort());
+  assert.deepEqual(p.unlocked, [true, true, true]);
+  assert.deepEqual(p.best, [3 / 9, 1 / 9, null]);
+  assert.deepEqual([p.hits, p.atBats], [3, 18], '타수가 많은 쪽 채택');
+  assert.equal(p.games, 2);
+  assert.deepEqual(p.daily, { date: '2026-11-11', avg: 0.1 });
+  assert.equal(m.current, a.current);
+  assert.equal(m.settings.muted, true);
 });
 
 console.log(`\n${passed} 통과, ${failed} 실패`);

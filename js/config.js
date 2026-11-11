@@ -11,7 +11,7 @@
 
     // 시간(초)
     AT_BAT_INTRO_SEC: 0.8,
-    WINDUP_SEC: 0.6,
+    WINDUP_SEC: 1.0,
     GRACE_SEC: 0.15, // 공 도착 후 입력 유예
     RESULT_SEC: 1.0, // 타석이 계속될 때 결과 연출
     AT_BAT_END_SEC: 1.2, // 타석 종료 결과 연출
@@ -83,6 +83,8 @@
 
     STORAGE_KEY: 'bbgame.v1',
     NAME_MAX: 8,
+    MAX_PLAYERS: 30, // 한 기기에 저장하는 타자 수 상한
+    LEADERBOARD_PAGE: 8, // 타자 기록 화면 한 페이지 인원
   };
 
   const api = { CONFIG };
