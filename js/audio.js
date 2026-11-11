@@ -528,7 +528,15 @@
       return st;
     }
 
-    return { unlock, setMuted, setAmbience, onGameEvent, fanfare, play, sampleStatus, isMuted: () => muted };
+    // 백그라운드 전환 시 오디오 멈춤/재개 (모바일 배터리·다른 앱 소리 배려)
+    function suspend() {
+      if (ctx && !offline && ctx.state === 'running') ctx.suspend();
+    }
+    function resume() {
+      if (ctx && !offline && ctx.state === 'suspended') ctx.resume();
+    }
+
+    return { unlock, setMuted, setAmbience, onGameEvent, fanfare, play, sampleStatus, suspend, resume, isMuted: () => muted };
   }
 
   Object.assign(BB, { createAudio });

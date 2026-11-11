@@ -9,6 +9,21 @@
   <body>
     <canvas id="game" width="1280" height="720"></canvas>
 
+    <!-- 터치 패드 (터치 기기의 게임 화면에서만). 존을 직접 누르면 손가락이 공을 가리기 때문 -->
+    <div id="touch-pad" hidden aria-label="타격 패드">
+      <button type="button" data-row="0" data-col="0"></button><button type="button" data-row="0" data-col="1"></button><button type="button" data-row="0" data-col="2"></button>
+      <button type="button" data-row="1" data-col="0"></button><button type="button" data-row="1" data-col="1"></button><button type="button" data-row="1" data-col="2"></button>
+      <button type="button" data-row="2" data-col="0"></button><button type="button" data-row="2" data-col="1"></button><button type="button" data-row="2" data-col="2"></button>
+    </div>
+
+    <!-- 세로 화면 안내 -->
+    <div id="rotate" hidden>
+      <div class="rotate-box">
+        <div class="rotate-icon" aria-hidden="true"></div>
+        <p>폰을 가로로 돌려주세요</p>
+      </div>
+    </div>
+
     <!-- 타자 이름 입력 대화상자 -->
     <div id="name-dialog" class="dialog" hidden>
       <form id="name-form" class="dialog-box" autocomplete="off" novalidate>

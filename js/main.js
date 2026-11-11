@@ -18,7 +18,15 @@
     lastFrameTs: null,
     lastLevel: 0,
     page: 0, // 타자 기록 화면 페이지
+    touch: false, // 터치 기기 (터치 패드·큰 버튼)
+    portrait: false, // 세로 화면
+    toast: null, // { text, until }
   };
+
+  const isIOS = /iPad|iPhone|iPod/.test(global.navigator.userAgent) || (global.navigator.platform === 'MacIntel' && global.navigator.maxTouchPoints > 1);
+  const isStandalone = (global.matchMedia && global.matchMedia('(display-mode: standalone)').matches) || global.navigator.standalone === true;
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const canFullscreen = () => !isIOS && !isStandalone && !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
 
   function today() {
     const d = new Date();
@@ -237,6 +245,13 @@
         return;
       case 'mute':
         return toggleMute();
+      case 'padSide': {
+        const settings = Object.assign({}, app.record.settings, { padSide: app.record.settings.padSide === 'left' ? 'right' : 'left' });
+        setRecord(Object.assign({}, app.record, { settings }));
+        return;
+      }
+      case 'fullscreen':
+        return toggleFullscreen();
       case 'pause':
         return setPaused(true);
       case 'resume':
@@ -284,10 +299,89 @@
     },
   });
 
-  global.addEventListener('resize', () => renderer.resize());
+  // ---- 모바일: 터치 감지, 터치 패드, 세로 화면, 전체화면 ----
+  const pad = document.getElementById('touch-pad');
+  const rotate = document.getElementById('rotate');
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--pad-cell', C.TOUCH.padCellPx + 'px');
+  rootStyle.setProperty('--pad-gap', C.TOUCH.padGapPx + 'px');
+  rootStyle.setProperty('--pad-margin', C.TOUCH.padMarginPx + 'px');
+
+  function setTouchMode(on) {
+    if (app.touch === on) return;
+    app.touch = on;
+    document.body.classList.toggle('touch', on);
+    renderer.setTouch(on);
+  }
+  if (global.matchMedia && global.matchMedia('(pointer: coarse)').matches) setTouchMode(true);
+  // 첫 터치 입력으로도 감지 (마우스·터치 겸용 기기)
+  global.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'touch') setTouchMode(true);
+  }, { capture: true, passive: true });
+
+  // 패드: 누른 칸으로 스윙. 누른 시각(event.timeStamp)을 그대로 넘긴다
+  for (const b of pad.querySelectorAll('button')) {
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (app.screen !== 'game' || !app.game || app.game.paused) return;
+      const cell = { row: Number(b.dataset.row), col: Number(b.dataset.col) };
+      audio.unlock();
+      swingAt(cell, e.timeStamp);
+      // 존의 같은 칸에도 잠깐 하이라이트
+      app.hover = cell;
+      app.padFlashUntil = performance.now() + 150;
+      b.classList.add('hit');
+      setTimeout(() => b.classList.remove('hit'), 120);
+    });
+  }
+  pad.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  function updatePad() {
+    const show = app.touch && app.screen === 'game' && app.game && !app.game.paused && !app.portrait && !dialogOpen();
+    if (pad.hidden === show) pad.hidden = !show;
+    pad.classList.toggle('left', app.record.settings.padSide === 'left');
+  }
+
+  function checkOrientation() {
+    const portrait = (app.touch || isIOS) && global.innerHeight > global.innerWidth;
+    if (portrait !== app.portrait) {
+      app.portrait = portrait;
+      rotate.hidden = !portrait;
+      if (portrait) setPaused(true); // 세로로 돌리면 자동 일시정지
+    }
+  }
+
+  function toggleFullscreen() {
+    try {
+      if (fsElement()) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        const p = req && req.call(el);
+        // 안드로이드: 전체화면이면 가로 고정 시도 (지원하지 않으면 무시)
+        if (p && p.then) p.then(() => global.screen.orientation && global.screen.orientation.lock && global.screen.orientation.lock('landscape').catch(() => {}));
+      }
+    } catch (e) {
+      /* 지원하지 않는 브라우저 */
+    }
+  }
+
+  function onResize() {
+    renderer.resize();
+    checkOrientation();
+  }
+  global.addEventListener('resize', onResize);
+  global.addEventListener('orientationchange', () => setTimeout(onResize, 100));
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) setPaused(true);
+    if (document.hidden) {
+      setPaused(true);
+      audio.suspend();
+    } else {
+      audio.resume();
+    }
   });
+  checkOrientation();
 
   function frame(ts) {
     const dt = app.lastFrameTs === null ? 0 : (ts - app.lastFrameTs) / 1000;
@@ -297,6 +391,12 @@
       for (const e of app.game.drainEvents()) audio.onGameEvent(e);
       if (app.game.phase === 'GAME_OVER') finishGame();
     }
+    if (app.padFlashUntil && performance.now() > app.padFlashUntil) {
+      app.hover = null;
+      app.padFlashUntil = 0;
+    }
+    updatePad();
+    if (app.toast && performance.now() > app.toast.until) app.toast = null;
     const player = currentPlayer();
     app.hits = renderer.draw({
       screen: app.screen,
@@ -310,6 +410,10 @@
       hover: app.hover,
       today: today(),
       now: ts / 1000, // 구름 등 장식 애니메이션용
+      canFullscreen: canFullscreen(),
+      isFullscreen: !!fsElement(),
+      iosHint: isIOS,
+      toast: app.toast && app.screen === 'title' ? app.toast.text : null,
     });
     global.requestAnimationFrame(frame);
   }

@@ -36,10 +36,33 @@
     let dpr = 1;
     let hits = [];
     let bg = null; // 고정 배경 캐시(실제 픽셀 크기)
+    let cssScale = 1; // 논리 1px이 화면에서 몇 CSS px인지
+    let touch = false; // 터치 기기 배치(큰 버튼, 존 확대)
+    let zoneScale = 1;
+    let minTap = 0; // 버튼 최소 높이(논리 px)
+
+    // 안전 영역(노치/홈바) 크기 (CSS 변수 --sa-*)
+    function safeArea() {
+      const cs = global.getComputedStyle(document.documentElement);
+      const v = (k) => parseFloat(cs.getPropertyValue(k)) || 0;
+      return { top: v('--sa-top'), right: v('--sa-right'), bottom: v('--sa-bottom'), left: v('--sa-left') };
+    }
+
+    function updateTouchLayout() {
+      minTap = touch ? C.TOUCH.minTapPx / cssScale : 0;
+      // 존 한 칸이 화면에서 너무 작으면 키움 (예: 아이폰 Safari 가로 + 주소창)
+      zoneScale = touch && (L.zone.h / 3) * cssScale < C.TOUCH.zoneCellMinPx ? C.MOBILE_ZONE_SCALE : 1;
+    }
+
+    function setTouch(on) {
+      touch = !!on;
+      updateTouchLayout();
+    }
 
     function resize() {
-      const vw = global.innerWidth;
-      const vh = global.innerHeight;
+      const sa = safeArea();
+      const vw = Math.max(1, global.innerWidth - sa.left - sa.right);
+      const vh = Math.max(1, global.innerHeight - sa.top - sa.bottom);
       const s = Math.min(vw / L.width, vh / L.height);
       const cssW = Math.max(1, Math.floor(L.width * s));
       const cssH = Math.max(1, Math.floor(L.height * s));
@@ -53,6 +76,8 @@
         canvas.height = h;
         bg = S.buildBackground(w, h);
       }
+      cssScale = cssW / L.width;
+      updateTouchLayout();
     }
 
     function toLogical(clientX, clientY) {
@@ -62,7 +87,9 @@
 
     function zoneRect() {
       const z = L.zone;
-      return { x: z.cx - z.w / 2, y: z.cy - z.h / 2, w: z.w, h: z.h, cw: z.w / 3, ch: z.h / 3 };
+      const w = z.w * zoneScale;
+      const h = z.h * zoneScale;
+      return { x: z.cx - w / 2, y: z.cy - h / 2, w, h, cw: w / 3, ch: h / 3 };
     }
 
     function cellAt(x, y) {
@@ -132,8 +159,13 @@
       ctx.closePath();
     }
 
+    // 터치 기기에서는 화면상 최소 높이(minTapPx)를 보장: 가운데를 유지한 채 키우고 화면 안으로 맞춤
     function button(id, x, y, w, h, label, opts) {
       opts = opts || {};
+      if (minTap > h && !opts.noMin) {
+        y = Math.max(0, Math.min(L.height - minTap, y + h / 2 - minTap / 2));
+        h = minTap;
+      }
       const disabled = !!opts.disabled;
       roundRect(x, y, w, h, 10);
       ctx.fillStyle = disabled ? 'rgba(60,60,60,0.8)' : opts.primary ? '#2f7de1' : 'rgba(20,30,45,0.85)';
@@ -143,16 +175,17 @@
       ctx.stroke();
       text(label, x + w / 2, y + h / 2, opts.size || 22, disabled ? '#888' : '#fff', 'center', 'bold');
       if (!disabled) hits.push({ id, x, y, w, h });
+      return { x, y, w, h };
     }
 
     // 음소거 토글 (M 키로도 전환)
     function muteButton(view, x, y, w, h) {
       const muted = view.record && view.record.settings.muted;
-      button('mute', x, y, w, h, muted ? '소리 끔' : '소리 켬', { size: 18 });
+      const r = button('mute', x, y, w, h, muted ? '소리 끔' : '소리 켬', { size: 18 });
       if (muted) {
         ctx.strokeStyle = '#ff8a8a';
         ctx.lineWidth = 2;
-        roundRect(x, y, w, h, 10);
+        roundRect(r.x, r.y, r.w, r.h, 10);
         ctx.stroke();
       }
     }
@@ -449,13 +482,14 @@
     }
 
     // 위: 이번 타석(미니 존 + 목록), 아래: 직전 타석(다음 타석이 끝날 때까지 유지)
-    function drawPitchLog(g) {
+    function drawPitchLog(g, x) {
       const cur = g.history.filter((h) => h.atBat === g.atBat);
       const prev = g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
-      const x = 1066;
-      const y = 150;
+      x = x == null ? 1066 : x;
+      const onLeft = x < L.width / 2; // 왼쪽이면 HUD 아래부터
+      const y = onLeft ? 232 : 150;
       const w = 200;
-      const bottom = 640; // 오른쪽 아래 버튼 위까지
+      const bottom = onLeft ? 708 : 640; // 오른쪽은 아래 버튼 위까지
       const cs = 34; // 미니 존 칸 크기
       const zx = x + (w - cs * 3) / 2;
       const zy = y + 34;
@@ -610,20 +644,30 @@
       drawHitFx(g);
       ctx.restore();
       drawHud(g, view);
-      drawPitchLog(g);
+      // 터치 기기: 투구 기록은 패드 반대쪽(HUD 아래 또는 오른쪽), 버튼은 오른쪽 위 일시정지 하나
+      const padLeft = view.record && view.record.settings.padSide === 'left';
+      const logX = touch && !padLeft ? 16 : 1066;
+      drawPitchLog(g, logX);
       drawBubble(g);
       drawCenterMessage(g);
-      muteButton(view, L.width - 410, L.height - 70, 120, 50);
-      button('pause', L.width - 280, L.height - 70, 120, 50, '일시정지', { size: 20 });
-      button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
+      if (touch) {
+        button('pause', L.width - 150, 8, 140, 56, '일시정지', { size: 20 });
+      } else {
+        muteButton(view, L.width - 410, L.height - 70, 120, 50);
+        button('pause', L.width - 280, L.height - 70, 120, 50, '일시정지', { size: 20 });
+        button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
+      }
       if (g.paused) {
         hits = [];
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, 0, L.width, L.height);
-        drawPitchLog(g); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
-        text('일시정지', 640, 260, 56, '#fff', 'center', 'bold');
-        button('resume', 640 - 210, 340, 200, 60, '계속하기', { primary: true });
-        button('menu', 640 + 10, 340, 200, 60, '메뉴로');
+        drawPitchLog(g, logX); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
+        text('일시정지', 640, 220, 56, '#fff', 'center', 'bold');
+        button('resume', 640 - 210, 290, 200, 60, '계속하기', { primary: true });
+        button('menu', 640 + 10, 290, 200, 60, '메뉴로');
+        // 소리, (터치 기기) 패드 위치
+        muteButton(view, 640 - 210, 400, 200, 60);
+        if (touch) button('padSide', 640 + 10, 400, 200, 60, '패드: ' + (padLeft ? '왼쪽' : '오른쪽'), { size: 20 });
       }
     }
 
@@ -692,9 +736,20 @@
       text(d, 640, cy + 76, 18, '#eee', 'center');
       hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 110 });
 
-      text('조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기', 640, 600, 16, '#bcd', 'center');
+      const hint = touch
+        ? '조작: 공이 오는 칸을 존에서 직접 누르거나, 화면 구석의 3×3 패드를 누르세요'
+        : '조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기';
+      text(hint, 640, 600, 16, '#bcd', 'center');
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
       muteButton(view, L.width - 150, 16, 130, 44);
+      if (view.canFullscreen) button('fullscreen', 20, 16, 150, 44, view.isFullscreen ? '전체화면 끄기' : '전체화면', { size: 18 });
+      if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 626, 15, '#9ab', 'center');
+      if (view.toast) {
+        roundRect(640 - 220, 560, 440, 40, 20);
+        ctx.fillStyle = 'rgba(47,125,225,0.92)';
+        ctx.fill();
+        text(view.toast, 640, 580, 18, '#fff', 'center', 'bold');
+      }
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
     }
 
@@ -733,7 +788,7 @@
         ];
         vals.forEach((v, k) => text(v, cols[k][1], cy, k === 1 || k === 2 ? 22 : 19, k === 2 ? '#ffd34d' : '#fff', cols[k][2], k <= 2 ? 'bold' : 'normal'));
         hits.push({ id: 'player:' + p.key, x: 60, y, w: 1000, h: 46 });
-        button('delete:' + p.key, 1080, y + 3, 90, 40, '삭제', { size: 16 });
+        button('delete:' + p.key, 1080, y + 3, 90, 40, '삭제', { size: 16, noMin: true });
       });
       text('행을 누르면 그 타자로 변경합니다', 640, 590, 16, '#9ab', 'center');
       if (pages > 1) {
@@ -810,7 +865,7 @@
     }
 
     resize();
-    return { resize, toLogical, cellAt, draw };
+    return { resize, toLogical, cellAt, draw, setTouch, cssScale: () => cssScale };
   }
 
   Object.assign(BB, { createRenderer });

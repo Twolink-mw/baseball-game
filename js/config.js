@@ -96,6 +96,16 @@
       batter: { x: 925, y: 708 }, // 발 사이 중앙
     },
 
+    // 모바일(터치 기기). 크기는 CSS px 기준
+    TOUCH: {
+      padCellPx: 60, // 터치 패드 한 칸 (명세 최소 56)
+      padGapPx: 6, // 칸 사이 간격
+      padMarginPx: 12, // 화면(안전 영역) 가장자리와의 간격
+      minTapPx: 44, // 캔버스 버튼의 화면상 최소 높이
+      zoneCellMinPx: 44, // 존 한 칸이 이보다 작게 보이면 존을 키움
+    },
+    MOBILE_ZONE_SCALE: 1.3,
+
     // 효과음
     AUDIO: {
       volume: 0.8, // 전체 음량
