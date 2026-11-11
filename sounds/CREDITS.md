@@ -21,7 +21,9 @@
 
 | 슬롯 | 제목 | 작성자 | 출처 URL | 라이선스 | 사용 구간 |
 |---|---|---|---|---|---|
-| homerun | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 0.9~6.4초 (전체 33초) |
-| ambience | (제목 확인 필요) | (확인 필요) | Pixabay (URL 확인 필요) | Pixabay Content License | 50초~1분18초 반복 (전체 430초) |
+| homerun | baseball home run | ballparkfanatic444 | https://pixabay.com/ko/sound-effects/%EC%98%81%ED%99%94-%EB%B0%8F-%ED%8A%B9%EC%88%98-%ED%9A%A8%EA%B3%BC-baseball-home-run-419442/ | Pixabay Content License | 0.9~6.4초 (전체 33초) |
+| ambience | baseball sounds | bowlingballout (Freesound), Pixabay 계정 freesound_community | https://pixabay.com/ko/sound-effects/%EB%8F%84%EC%8B%9C-baseball-sounds-52818/ | Pixabay Content License | 50초~1분18초 반복 (전체 7분 10초) |
 
 원본 mp3는 `.gitignore`로 저장소에서 제외한다(원본 단독 재배포 금지). 다른 PC에서 다시 내장하려면 원본을 이 폴더에 다시 넣고 도구를 실행.
+
+확인일: 2026-11-11 (두 페이지 모두 "Pixabay 콘텐츠 라이선스에 따른 무료 사용" 표시)
