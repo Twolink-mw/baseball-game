@@ -52,7 +52,7 @@
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.38, // M3 시뮬레이션 튜닝: 0.42 → 0.38 (Lv.1 ≥ Lv.2 유지)
+        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.40, // M3 튜닝 0.42 → 0.38, 플레이 피드백(Lv.3보다 어렵게 느껴짐) 0.38 → 0.40
         tempo: { hold: [0, 0.8], motion: [0.7, 0.9] }, // 가끔 길게 멈춤
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
