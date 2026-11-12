@@ -131,6 +131,17 @@
       return p;
     }
 
+    // 도착 뒤 지난 구간의 진행도(0~1). t는 비행 시간 기준 진행도
+    function passProgress(pitch, t) {
+      return t <= 1 ? 0 : Math.min(1, ((t - 1) * pitch.flightSec) / FX.passSec);
+    }
+
+    // 공 반지름. 도착 뒤에는 원근 공식 대신 passGrow 배까지만 커진다
+    function ballSize(pitch, t) {
+      if (t <= 1) return ballRadius(t);
+      return L.ballR1 * (1 + (FX.passGrow - 1) * passProgress(pitch, t));
+    }
+
     // 공 위치. 공개 전(시간 기준)에는 존 중앙을 향하고, 공개 구간에서 실제 코스로 휜다.
     // 화면 이동량은 원근 진행도를 따른다. t>1이면 포수 쪽(아래)으로 빠져나간다.
     function ballPos(pitch, t) {
@@ -151,7 +162,7 @@
         const k = 4 * s * (1 - s);
         p = { x: base.x + bend.x * k, y: base.y - bend.y * k };
       }
-      if (t > 1) p = { x: p.x, y: p.y + (t - 1) * 600 };
+      if (t > 1) p = { x: p.x, y: p.y + zoneRect().ch * FX.passDropCells * passProgress(pitch, t) };
       return p;
     }
 
@@ -341,14 +352,15 @@
 
     function drawBall(g) {
       const t = g.ballProgress();
-      if (t !== null && t >= 0 && t <= 1.2) {
-        const fade = t > 1 ? Math.max(0, 1 - (t - 1) / 0.2) : 1;
+      const endT = g.pitch ? 1 + FX.passSec / g.pitch.flightSec : 1;
+      if (t !== null && t >= 0 && t <= endT) {
+        const fade = 1 - passProgress(g.pitch, t);
         for (let k = 3; k >= 1; k--) {
           const tk = t - (k * FX.trailSec) / g.pitch.flightSec;
           if (tk < 0) continue;
-          ballSprite(ballPos(g.pitch, tk), ballRadius(tk) * 0.9, (0.22 / k) * fade, 0);
+          ballSprite(ballPos(g.pitch, tk), ballSize(g.pitch, tk) * 0.9, (0.22 / k) * fade, 0);
         }
-        ballSprite(ballPos(g.pitch, t), ballRadius(t), fade, t * g.pitch.flightSec * 40);
+        ballSprite(ballPos(g.pitch, t), ballSize(g.pitch, t), fade, t * g.pitch.flightSec * 40);
       }
       // 결과 연출 중: 실제 코스를 점선 원으로 표시
       if (g.phase === 'RESULT_SHOW' && g.last) {
