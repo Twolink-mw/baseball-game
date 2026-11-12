@@ -275,7 +275,7 @@ CONFIG.LEVELS.forEach((level, i) => {
     const p = createPitcher(level, createRng(300 + i));
     for (let k = 0; k < 500; k++) {
       const pitch = p.nextPitch();
-      assert.equal(pitch.revealSec, level.revealSec);
+      assert.equal(pitch.revealSec, pitch.ball ? Math.min(level.revealSec * CONFIG.BALL.revealMult, 1) : level.revealSec);
       assert.ok(Math.abs(pitch.flightSec - flightForSpeed(pitch.speed)) < 1e-12);
       assert.ok(pitch.type in level.pitchMix, '레벨에 없는 구종 ' + pitch.type);
       const base = level.baseSpeed + CONFIG.PITCH_TYPES[pitch.type].speedDelta;

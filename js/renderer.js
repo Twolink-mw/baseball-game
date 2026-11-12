@@ -119,11 +119,23 @@
       return { x: z.x + z.cw * (cell.col + 0.5), y: z.y + z.ch * (cell.row + 0.5) };
     }
 
+    // 공이 꽂히는 자리. 볼(존 바깥 칸)은 가장자리에서 BALL.outCells만큼 바깥으로 더 뺀다
+    function pitchTarget(cell) {
+      const z = zoneRect();
+      const p = cellCenter(cell);
+      const extra = C.BALL.outCells - 0.5;
+      if (cell.row < 0) p.y -= z.ch * extra;
+      if (cell.row > 2) p.y += z.ch * extra;
+      if (cell.col < 0) p.x -= z.cw * extra;
+      if (cell.col > 2) p.x += z.cw * extra;
+      return p;
+    }
+
     // 공 위치. 공개 전(시간 기준)에는 존 중앙을 향하고, 공개 구간에서 실제 코스로 휜다.
     // 화면 이동량은 원근 진행도를 따른다. t>1이면 포수 쪽(아래)으로 빠져나간다.
     function ballPos(pitch, t) {
       const center = { x: L.zone.cx, y: L.zone.cy };
-      const target = cellCenter(pitch.cell);
+      const target = pitchTarget(pitch.cell);
       const u = Math.max(0, 1 - pitch.revealSec / pitch.flightSec);
       const tt = Math.min(t, 1);
       const sp = screenProgress(tt);
@@ -340,7 +352,7 @@
       }
       // 결과 연출 중: 실제 코스를 점선 원으로 표시
       if (g.phase === 'RESULT_SHOW' && g.last) {
-        const p = cellCenter(g.last.pitch.cell);
+        const p = pitchTarget(g.last.pitch.cell);
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
         ctx.setLineDash([4, 4]);
         ctx.lineWidth = 2;
@@ -411,7 +423,7 @@
       if (g.phase !== 'RESULT_SHOW' || !g.last || !isContact(g.last)) return;
       const last = g.last;
       const e = g.phaseElapsed();
-      const from = cellCenter(last.pitch.cell);
+      const from = pitchTarget(last.pitch.cell);
       // 맞는 순간 섬광
       if (e < FX.flashSec) {
         const k = e / FX.flashSec;

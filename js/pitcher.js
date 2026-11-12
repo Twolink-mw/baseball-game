@@ -74,7 +74,7 @@
           type,
           speed,
           flightSec: flightForSpeed(speed, C),
-          revealSec: level.revealSec,
+          revealSec: ball ? Math.min(level.revealSec * C.BALL.revealMult, 1) : level.revealSec, // 볼은 일찍 바깥으로 휨
           holdSec,
           motionSec,
           windupSec: holdSec + motionSec, // 와인드업 시작 → 릴리스
