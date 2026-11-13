@@ -937,13 +937,19 @@
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(-ox, 0, LW, L.height);
         drawPitchLog(g, logPlacement(view, g)); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
-        text('일시정지', 640, 220, 56, '#fff', 'center', 'bold');
-        button('resume', 640 - 210, 290, 200, 60, '계속하기', { primary: true });
-        button('menu', 640 + 10, 290, 200, 60, '메뉴로');
-        // 소리, (터치 기기) 패드 위치
-        muteButton(view, touch ? 640 - 110 : 640, 430, 64);
-        if (touch) button('padSide', 640 + 10, 400, 200, 60, '패드: ' + (padLeft ? '왼쪽' : '오른쪽'), { size: 20 });
-        if (practice) button('pauseAnalysis', 640 - 100, touch ? 480 : 490, 200, 56, '분석 보기', { size: 20 });
+        // 줄 높이는 터치 기기에서 커진 버튼 높이(minTap)에 맞춰 겹치지 않게 (피드백: '분석 보기'가 '패드' 버튼 위에 겹침)
+        const rh = Math.max(60, Math.min(minTap, 90));
+        const gapY = 14;
+        const r1 = touch ? 250 : 290;
+        const r2 = r1 + rh + gapY;
+        const r3 = r2 + rh + gapY;
+        text('일시정지', 640, r1 - 64, 56, '#fff', 'center', 'bold');
+        button('resume', 640 - 210, r1, 200, rh, '계속하기', { primary: true, noMin: true });
+        button('menu', 640 + 10, r1, 200, rh, '메뉴로', { noMin: true });
+        // 둘째 줄: 소리, (터치 기기) 패드 위치. 셋째 줄: (연습) 분석 보기
+        muteButton(view, touch ? 640 - 110 : 640, r2 + rh / 2, 64);
+        if (touch) button('padSide', 640 + 10, r2, 200, rh, '패드: ' + (padLeft ? '왼쪽' : '오른쪽'), { size: 20, noMin: true });
+        if (practice) button('pauseAnalysis', 640 - 100, r3, 200, rh, '분석 보기', { size: 20, noMin: true });
       }
     }
 
@@ -953,18 +959,21 @@
       text('코스가 보이면, 공이 도착하는 순간에 맞춰 누르세요', 640, 104, 20, '#cfe', 'center');
 
       // 현재 타자 배너 (대표 칭호 포함)
+      // 터치 기기는 버튼이 커지므로 배너도 그 높이로 (피드백: '타자 변경' 버튼만 배너 밖으로 삐져나와 어색함)
       const BW = 780;
       const bx = 640 - BW / 2;
-      const by = 128;
-      roundRect(bx, by, BW, 54, 12);
+      const BH = touch ? Math.max(54, Math.min(minTap, 74)) : 54;
+      const by = touch ? 120 : 128;
+      roundRect(bx, by, BW, BH, 12);
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fill();
       const p = view.player;
       if (p) {
         const career = BB.careerAvg(p);
-        text(p.bats === 'L' ? '좌타' : '우타', bx + 20, by + 27, 18, '#9cf', 'left', 'bold');
-        text(p.name, bx + 68, by + 27, 24, '#ffd34d', 'left', 'bold');
-        text('통산 ' + (career === null ? '-' : BB.formatAvg(career)) + ' (' + p.atBats + '타수)', bx + 270, by + 27, 18, '#dde', 'left');
+        const my = by + BH / 2;
+        text(p.bats === 'L' ? '좌타' : '우타', bx + 20, my, 18, '#9cf', 'left', 'bold');
+        text(p.name, bx + 68, my, 24, '#ffd34d', 'left', 'bold');
+        text('통산 ' + (career === null ? '-' : BB.formatAvg(career)) + ' (' + p.atBats + '타수)', bx + 270, my, 18, '#dde', 'left');
         const t = BB.topTitle(p);
         if (t) {
           // 이름 바로 옆에 자리가 있으면 거기, 아니면 통산 타율 뒤
@@ -972,12 +981,14 @@
           const nx = bx + 68 + ctx.measureText(p.name).width + 10;
           ctx.font = 'bold 16px ' + FONT;
           const pw = ctx.measureText(t.name).width + 16;
-          titlePill(t.name, nx + pw <= bx + 262 ? nx : bx + 470, by + 27, 16);
+          titlePill(t.name, nx + pw <= bx + 262 ? nx : bx + 470, by + BH / 2, 16);
         }
       } else {
-        text('타자 이름을 정해 주세요', bx + 20, by + 27, 20, '#ffd34d', 'left', 'bold');
+        text('타자 이름을 정해 주세요', bx + 20, by + BH / 2, 20, '#ffd34d', 'left', 'bold');
       }
-      button('changeBatter', bx + BW - 140, by + 7, 130, 40, p ? '타자 변경' : '이름 입력', { size: 18, primary: !p });
+      // 버튼은 배너 안쪽에 딱 맞게. 터치 기기는 배너 전체를 눌러도 타자 변경
+      if (touch) hits.push({ id: 'changeBatter', x: bx, y: by, w: BW, h: BH });
+      button('changeBatter', bx + BW - 140, by + 6, 130, BH - 12, p ? '타자 변경' : '이름 입력', { size: 18, primary: !p, noMin: true });
 
       const rec = view.playerData;
       const cw = 300;
@@ -1152,14 +1163,19 @@
         const x = x0 + 2 * (cw + gap);
         const o = view.practiceOpts;
         modeCard(x, y, cw, h, '#7cc4ff');
-        text(M.practice.name, x + cw / 2, y + 40, 32, '#7cc4ff', 'center', 'bold');
-        text(M.practice.desc, x + cw / 2, y + 80, 16, '#bcd', 'center');
-        // 지금 설정 요약 (바꾸기는 '설정' 패널에서)
+        // 버튼은 카드 아래쪽에 붙임. 터치 기기는 버튼이 손가락 크기만큼 커지므로(minTap) 그만큼 글자를 위로 모음
+        // (피드백: 휴대폰에서 커진 버튼이 '코스' 글자를 가림)
+        const bh = Math.max(50, Math.min(minTap, 88));
+        const btnY = y + h - 12 - bh;
+        const tight = bh > 60;
         const lv = C.LEVELS[o.levelIndex];
-        text(lv.name + ' ' + lv.baseSpeed + 'km · ' + (o.type || '전 구종') + ' · ' + (o.balls ? '볼 있음' : '볼 없음'), x + cw / 2, y + 116, 17, '#fff', 'center', 'bold');
-        text('코스 ' + practiceCourseLabel(o.cells), x + cw / 2, y + 144, 16, '#dde', 'center');
-        button('ppanel:open', x + 20, y + 168, 130, 50, '설정', { size: 18 });
-        button('practice', x + 162, y + 168, cw - 182, 50, '연습 시작 ▶', { primary: true, size: 19 });
+        text(M.practice.name, x + cw / 2, y + (tight ? 30 : 40), tight ? 28 : 32, '#7cc4ff', 'center', 'bold');
+        if (!tight) text(M.practice.desc, x + cw / 2, y + 80, 16, '#bcd', 'center');
+        // 지금 설정 요약 (바꾸기는 '설정' 패널에서)
+        text(lv.name + ' ' + lv.baseSpeed + 'km · ' + (o.type || '전 구종') + ' · ' + (o.balls ? '볼 있음' : '볼 없음'), x + cw / 2, y + (tight ? 66 : 116), 17, '#fff', 'center', 'bold');
+        text('코스 ' + practiceCourseLabel(o.cells), x + cw / 2, y + (tight ? 94 : 144), 16, '#dde', 'center');
+        button('ppanel:open', x + 20, btnY, 130, bh, '설정', { size: 18, noMin: true });
+        button('practice', x + 162, btnY, cw - 182, bh, '연습 시작 ▶', { primary: true, size: 19, noMin: true });
       }
       // 보스 투수
       const by = 380;
