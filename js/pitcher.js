@@ -45,15 +45,37 @@
     return T[T.length - 1][1];
   }
 
+  const FASTBALLS = { '직구': 1, '투심': 1 };
+
+  // 수싸움(level.sequencing): 카운트에 따른 볼 비율, 직전 구종에 따른 구종 가중치. 없으면 그대로
+  function seqBallRate(level, count) {
+    const s = level.sequencing;
+    let rate = level.ballRate || 0;
+    if (!s || !count) return rate;
+    if (count.strikes >= 2) rate *= s.twoStrikeBallMult;
+    else if (count.strikes === 0 && count.balls === 0) rate *= s.firstPitchBallMult;
+    return Math.min(rate, 1);
+  }
+
+  function seqPitchMix(level, lastType) {
+    const s = level.sequencing;
+    if (!s || !lastType || !FASTBALLS[lastType]) return level.pitchMix;
+    const mix = {};
+    for (const [k, w] of Object.entries(level.pitchMix)) mix[k] = FASTBALLS[k] ? w : w * s.afterFastballOffspeed;
+    return mix;
+  }
+
   // 투구 시작 시점에 코스를 확정한다. 사용자의 현재 클릭은 보지 않는다.
   function createPitcher(level, rng, config) {
     const C = config || CONFIG;
     let lastIdx = null;
+    let lastType = null;
     const clickHistory = []; // 칸 인덱스, 최근 historySize개
 
     return {
       // opts.allowBall: false면 반드시 스트라이크 (볼 3개 이후, 볼넷 없음)
       // opts.speedBonus: 구속 가산(km/h, 서바이벌). 난수 순서에는 영향 없음
+      // opts.count: { balls, strikes } 수싸움용. 비교 기준·가중치만 바뀌고 뽑는 난수 개수·순서는 같음
       // 난수는 볼 허용 여부와 관계없이 항상 같은 순서로 뽑는다 → 챌린지 투구 순서가 판정 결과에 흔들리지 않음
       nextPitch(opts) {
         const allowBall = !opts || opts.allowBall !== false;
@@ -63,8 +85,9 @@
         lastIdx = idx;
         const ballRoll = rng.next();
         const ballCell = BALL_CELLS[rng.int(BALL_CELLS.length)];
-        const ball = allowBall && ballRoll < (level.ballRate || 0);
-        const type = rng.pickWeighted(level.pitchMix);
+        const ball = allowBall && ballRoll < seqBallRate(level, opts && opts.count);
+        const type = rng.pickWeighted(seqPitchMix(level, lastType));
+        lastType = type;
         const delta = C.PITCH_TYPES[type].speedDelta;
         const speed = Math.round(level.baseSpeed + speedBonus + delta + rng.range(-C.SPEED_JITTER, C.SPEED_JITTER));
         // 투구 템포: 세트 자세에서 멈추는 시간 + 투구 동작 시간 (투구용 RNG라 챌린지에서도 기기마다 같음)
@@ -89,7 +112,7 @@
     };
   }
 
-  const api = { createPitcher, flightForSpeed, cellWeights, cellIndex, indexCell, isBallCell, BALL_CELLS };
+  const api = { createPitcher, flightForSpeed, cellWeights, cellIndex, indexCell, isBallCell, BALL_CELLS, seqBallRate, seqPitchMix };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);

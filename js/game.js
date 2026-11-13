@@ -41,7 +41,10 @@
     delete over.id;
     delete over.name;
     delete over.desc;
-    return Object.assign({}, base, over, { title: pitcher.name });
+    const level = Object.assign({}, base, over, { title: pitcher.name });
+    // 수싸움은 카운트(타자 입력)에 따라 투구가 달라져 기기마다 같은 순서를 보장할 수 없으므로 뺀다
+    delete level.sequencing;
+    return level;
   }
 
   // 도전 모드 구성 → { mode, levelIndex, level, rules, modeName, bossId? }
@@ -54,6 +57,7 @@
     if (modeId === 'practice') {
       const levelIndex = Math.max(0, Math.min(C.LEVELS.length - 1, opts.levelIndex || 0));
       const level = Object.assign({}, C.LEVELS[levelIndex]);
+      delete level.sequencing; // 연습은 카운트가 없음
       if (opts.type && C.PITCH_TYPES[opts.type]) level.pitchMix = { [opts.type]: 1 };
       if (!opts.balls) level.ballRate = 0;
       return { mode: modeId, levelIndex, level, rules: { practice: true }, modeName: M.name };
@@ -241,7 +245,12 @@
   // level을 주면 LEVELS 대신 사용 (챌린지의 오늘의 투수)
   function createGame(opts) {
     const C = opts.config || BB.CONFIG;
-    const level = opts.level || C.LEVELS[opts.levelIndex];
+    let level = opts.level || C.LEVELS[opts.levelIndex];
+    // 챌린지는 어떤 레벨이 와도 수싸움을 뺀다: 카운트(타자 입력)에 따라 투구가 달라지면 기기마다 순서가 달라짐
+    if (opts.mode === 'challenge' && level.sequencing) {
+      level = Object.assign({}, level);
+      delete level.sequencing;
+    }
     const pitchRng = BB.createRng(opts.pitchSeed);
     const judgeRng = BB.createRng(opts.judgeSeed);
     const pitcher = BB.createPitcher(level, pitchRng, C);
@@ -448,7 +457,7 @@
     }
 
     function startPitch(at) {
-      g.pitch = pitcher.nextPitch({ allowBall: g.balls < C.MAX_BALLS, speedBonus: g.speedBonus() });
+      g.pitch = pitcher.nextPitch({ allowBall: g.balls < C.MAX_BALLS, speedBonus: g.speedBonus(), count: { balls: g.balls, strikes: g.strikes } });
       g.pitchLog.push(g.pitch);
       g.pitchInAtBat++;
       g.totalPitches++;

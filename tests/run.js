@@ -1057,6 +1057,70 @@ section('도전 모드');
   });
 }
 
+section('수싸움 (카운트를 보는 투수)');
+{
+  const { modeSetup, challengeSetup } = require('../js/game.js');
+  const { seqBallRate, seqPitchMix } = require('../js/pitcher.js');
+  const ballShare = (level, count, n = 20000) => {
+    const p = createPitcher(level, createRng(11), CONFIG);
+    let balls = 0;
+    for (let i = 0; i < n; i++) if (p.nextPitch({ count }).ball) balls++;
+    return balls / n;
+  };
+  test('2스트라이크면 볼(유인구)이 늘고, 초구는 줄어듦 (Lv.3 통계)', () => {
+    const lv = CONFIG.LEVELS[2];
+    const s = lv.sequencing;
+    const mid = ballShare(lv, { balls: 1, strikes: 1 });
+    const two = ballShare(lv, { balls: 1, strikes: 2 });
+    const first = ballShare(lv, { balls: 0, strikes: 0 });
+    assert.ok(Math.abs(mid - lv.ballRate) < 0.015, 'mid ' + mid);
+    assert.ok(Math.abs(two - lv.ballRate * s.twoStrikeBallMult) < 0.015, 'two ' + two);
+    assert.ok(Math.abs(first - lv.ballRate * s.firstPitchBallMult) < 0.015, 'first ' + first);
+    assert.equal(seqBallRate(CONFIG.LEVELS[0], { balls: 0, strikes: 2 }), CONFIG.LEVELS[0].ballRate); // Lv.1은 수싸움 없음
+  });
+  test('직구·투심 다음에는 변화구 가중치가 오름', () => {
+    const lv = CONFIG.LEVELS[2];
+    const after = seqPitchMix(lv, '직구');
+    assert.equal(after['직구'], lv.pitchMix['직구']);
+    assert.equal(after['커브'], lv.pitchMix['커브'] * lv.sequencing.afterFastballOffspeed);
+    assert.equal(seqPitchMix(lv, '커브'), lv.pitchMix);
+    // 통계: 직구 다음 변화구 비율 > 변화구 다음 변화구 비율
+    const p = createPitcher(lv, createRng(21), CONFIG);
+    const tally = { fast: [0, 0], off: [0, 0] };
+    let prev = null;
+    for (let i = 0; i < 30000; i++) {
+      const t = p.nextPitch().type;
+      if (prev) {
+        const k = prev === '직구' || prev === '투심' ? 'fast' : 'off';
+        tally[k][0]++;
+        if (t !== '직구' && t !== '투심') tally[k][1]++;
+      }
+      prev = t;
+    }
+    assert.ok(tally.fast[1] / tally.fast[0] > tally.off[1] / tally.off[0] + 0.05, JSON.stringify(tally));
+  });
+  test('챌린지·보스·연습에는 수싸움 없음 (같은 날 같은 투구 순서)', () => {
+    assert.equal(challengeSetup('2026-11-13', CONFIG).level.sequencing, undefined);
+    assert.equal(modeSetup('boss', { bossId: 'power' }, CONFIG).level.sequencing, undefined);
+    assert.equal(modeSetup('practice', { levelIndex: 2 }, CONFIG).level.sequencing, undefined);
+    assert.ok(modeSetup('survival', null, CONFIG).level.sequencing); // 서바이벌은 있음
+  });
+  test('수싸움이 있어도 같은 시드·같은 카운트면 같은 투구 (난수 순서 유지)', () => {
+    const lv = CONFIG.LEVELS[2];
+    const a = createPitcher(lv, createRng(5), CONFIG);
+    const b = createPitcher(lv, createRng(5), CONFIG);
+    for (let i = 0; i < 200; i++) {
+      const count = { balls: i % 3, strikes: (i >> 1) % 3 };
+      assert.deepEqual(a.nextPitch({ count }), b.nextPitch({ count }));
+    }
+    // 카운트만 달라도 코스 칸 난수는 같은 자리에서 뽑힘
+    const c = createPitcher(lv, createRng(8), CONFIG).nextPitch({ count: { balls: 0, strikes: 0 } });
+    const d = createPitcher(lv, createRng(8), CONFIG).nextPitch({ count: { balls: 1, strikes: 2 } });
+    assert.equal(c.speed, d.speed);
+    assert.equal(c.holdSec, d.holdSec);
+  });
+}
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {

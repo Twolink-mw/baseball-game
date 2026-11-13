@@ -74,6 +74,9 @@
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
         ballRate: 0.3,
+        // 수싸움(카운트를 보는 투수): 2스트라이크면 유인구(볼) 비율 배수, 초구(0-0)는 스트라이크를 잡으러 옴, 직구·투심 다음 변화구 가중치 배수
+        // 카운트는 타자 입력에 따라 달라지므로 챌린지·보스·연습에서는 지운다 (기기마다 같은 투구 순서 보장)
+        sequencing: { twoStrikeBallMult: 1.3, firstPitchBallMult: 0.8, afterFastballOffspeed: 1.3 },
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
@@ -82,6 +85,7 @@
         pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
         ballRate: 0.3,
+        sequencing: { twoStrikeBallMult: 1.6, firstPitchBallMult: 0.6, afterFastballOffspeed: 1.6 },
         adjacent: { FOUL: 20, OUT_BIP: 30, SWING_MISS: 50 },
       },
     ],
