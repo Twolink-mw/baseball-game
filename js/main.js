@@ -11,7 +11,7 @@
   const app = {
     screen: 'title', // title | game | result | players | modes
     lastStart: null, // 다시하기용 { levelIndex, mode, opts }
-    practiceOpts: { levelIndex: 0, type: null, balls: true }, // 연습 설정 (저장 안 함)
+    practiceOpts: { levelIndex: 0, type: null, balls: true, row: null, col: null }, // 연습 설정 (저장 안 함). row/col: 코스 고정
     pauseAnalysis: false, // 연습 일시정지 중 분석 보기
     record: BB.storage.load(),
     game: null,
@@ -388,6 +388,7 @@
         const types = [null].concat(Object.keys(C.PITCH_TYPES));
         o.type = types[(types.indexOf(o.type) + 1) % types.length];
       } else if (what === 'balls') o.balls = !o.balls;
+      else if (what === 'row' || what === 'col') o[what] = o[what] === null ? 0 : o[what] >= 2 ? null : o[what] + 1; // 전체 → 0 → 1 → 2 → 전체
       return;
     }
     if (id.startsWith('player:')) {

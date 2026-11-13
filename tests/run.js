@@ -1057,6 +1057,36 @@ section('도전 모드');
   });
 }
 
+section('연습 코스 고정');
+{
+  const { modeSetup } = require('../js/game.js');
+  const throwMany = (opts, n = 600) => {
+    const p = createPitcher(modeSetup('practice', opts, CONFIG).level, createRng(31), CONFIG);
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(p.nextPitch());
+    return out;
+  };
+  test('높이만 고르면 그 줄, 좌우도 고르면 한 칸, 안 고르면 전체', () => {
+    assert.deepEqual(modeSetup('practice', { row: 2 }, CONFIG).level.cells, [6, 7, 8]);
+    assert.deepEqual(modeSetup('practice', { col: 0 }, CONFIG).level.cells, [0, 3, 6]);
+    assert.deepEqual(modeSetup('practice', { row: 2, col: 0 }, CONFIG).level.cells, [6]);
+    assert.equal(modeSetup('practice', { row: null, col: null }, CONFIG).level.cells, undefined);
+    const low = throwMany({ levelIndex: 2, row: 2, balls: false });
+    assert.ok(low.every((x) => x.cell.row === 2));
+    assert.equal(new Set(low.map((x) => x.cell.col)).size, 3);
+    assert.ok(throwMany({ levelIndex: 1, row: 0, col: 2, balls: false }).every((x) => x.cell.row === 0 && x.cell.col === 2));
+  });
+  test('볼은 고정한 칸과 맞닿은 자리로만, 가운데 칸만 고르면 볼 없음', () => {
+    const low = throwMany({ levelIndex: 1, row: 2, balls: true }, 2000);
+    const balls = low.filter((x) => x.ball);
+    assert.ok(balls.length > 300);
+    assert.ok(balls.every((x) => x.cell.row >= 2), '아래 줄 옆·아래의 볼만');
+    assert.ok(balls.some((x) => x.cell.row === 3) && balls.some((x) => x.cell.col === -1 || x.cell.col === 3));
+    assert.ok(low.filter((x) => !x.ball).every((x) => x.cell.row === 2));
+    assert.ok(throwMany({ levelIndex: 1, row: 1, col: 1, balls: true }).every((x) => !x.ball && x.cell.row === 1 && x.cell.col === 1));
+  });
+}
+
 section('수싸움 (카운트를 보는 투수)');
 {
   const { modeSetup, challengeSetup } = require('../js/game.js');

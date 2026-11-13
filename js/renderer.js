@@ -1024,15 +1024,21 @@
         const x = x0 + 2 * (cw + gap);
         const o = view.practiceOpts;
         modeCard(x, y, cw, h, '#7cc4ff');
-        text(M.practice.name, x + cw / 2, y + 36, 32, '#7cc4ff', 'center', 'bold');
-        text(M.practice.desc, x + cw / 2, y + 72, 16, '#bcd', 'center');
+        text(M.practice.name, x + 24, y + 28, 28, '#7cc4ff', 'left', 'bold');
+        text('눌러서 바꾸기 · 기록 없음', x + cw - 20, y + 30, 14, '#9ab', 'right');
         const lv = C.LEVELS[o.levelIndex];
+        // 좁은 카드에 두 줄이라 터치 최소 높이 확대(noMin)는 쓰지 않고 버튼 자체를 크게
         const bw = (cw - 40 - 16) / 3;
-        button('popt:level', x + 20, y + 92, bw, 48, lv.name + ' ' + lv.baseSpeed, { size: 16 });
-        button('popt:type', x + 20 + bw + 8, y + 92, bw, 48, o.type || '전 구종', { size: 16 });
-        button('popt:balls', x + 20 + (bw + 8) * 2, y + 92, bw, 48, o.balls ? '볼 있음' : '볼 없음', { size: 16 });
-        text('버튼을 눌러 바꾸기', x + cw / 2, y + 152, 14, '#9ab', 'center');
-        button('practice', x + 60, y + 166, cw - 120, 50, '연습 시작 ▶', { primary: true, size: 20 });
+        button('popt:level', x + 20, y + 50, bw, 56, lv.name + ' ' + lv.baseSpeed, { size: 16, noMin: true });
+        button('popt:type', x + 20 + bw + 8, y + 50, bw, 56, o.type || '전 구종', { size: 16, noMin: true });
+        button('popt:balls', x + 20 + (bw + 8) * 2, y + 50, bw, 56, o.balls ? '볼 있음' : '볼 없음', { size: 16, noMin: true });
+        // 코스 고정: 높이 + 좌우 (둘 다 고르면 한 칸)
+        const hw = (cw - 40 - 8) / 2;
+        const ROWS = ['높은 공', '가운데', '낮은 공'];
+        const COLS = ['왼쪽', '가운데', '오른쪽'];
+        button('popt:row', x + 20, y + 112, hw, 56, '높이: ' + (o.row == null ? '전체' : ROWS[o.row]), { size: 16, noMin: true });
+        button('popt:col', x + 20 + hw + 8, y + 112, hw, 56, '좌우: ' + (o.col == null ? '전체' : COLS[o.col]), { size: 16, noMin: true });
+        button('practice', x + 60, y + 176, cw - 120, 44, '연습 시작 ▶', { primary: true, size: 20, noMin: true });
       }
       // 보스 투수
       const by = 380;

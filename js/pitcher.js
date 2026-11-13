@@ -80,12 +80,18 @@
       nextPitch(opts) {
         const allowBall = !opts || opts.allowBall !== false;
         const speedBonus = (opts && opts.speedBonus) || 0;
-        const w = cellWeights(level.ai, lastIdx, clickHistory, C);
+        let w = cellWeights(level.ai, lastIdx, clickHistory, C);
+        // 코스 고정(연습): level.cells에 있는 칸으로만. 볼도 그 칸들과 맞닿은 자리로만
+        let ballCells = BALL_CELLS;
+        if (level.cells) {
+          w = w.map((x, i) => (level.cells.includes(i) ? x : 0));
+          ballCells = BALL_CELLS.filter((b) => level.cells.includes(Math.max(0, Math.min(2, b.row)) * 3 + Math.max(0, Math.min(2, b.col))));
+        }
         const idx = rng.pickWeighted(w.map((x, i) => [i, x]));
         lastIdx = idx;
         const ballRoll = rng.next();
-        const ballCell = BALL_CELLS[rng.int(BALL_CELLS.length)];
-        const ball = allowBall && ballRoll < seqBallRate(level, opts && opts.count);
+        const ballCell = ballCells[rng.int(ballCells.length || 1)] || null;
+        const ball = allowBall && !!ballCell && ballRoll < seqBallRate(level, opts && opts.count);
         const type = rng.pickWeighted(seqPitchMix(level, lastType));
         lastType = type;
         const delta = C.PITCH_TYPES[type].speedDelta;
