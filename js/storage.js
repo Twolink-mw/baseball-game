@@ -29,7 +29,20 @@
   function defaultPlayer(name) {
     const unlocked = new Array(NLEVELS).fill(false);
     unlocked[0] = true;
-    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0 };
+    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0, titles: [] };
+  }
+
+  // 칭호 id 목록 정리: 아는 id만, 중복 없이, TITLES 순서(귀한 순)
+  const TITLE_IDS = CONFIG.TITLES.map((t) => t.id);
+  function normalizeTitles(list) {
+    if (!Array.isArray(list)) return [];
+    return TITLE_IDS.filter((id) => list.includes(id));
+  }
+
+  // 대표 칭호(가장 귀한 것) 또는 null
+  function topTitle(player) {
+    const id = player && player.titles && player.titles[0];
+    return (id && CONFIG.TITLES.find((t) => t.id === id)) || null;
   }
 
   function defaultRecord() {
@@ -60,6 +73,7 @@
       if (obj.daily.mission === true) p.daily.mission = true; // 그날 공식 판에서 미션 달성
     }
     if (isCount(obj.missions)) p.missions = obj.missions; // 챌린지 미션 누적 달성 횟수
+    p.titles = normalizeTitles(obj.titles); // 칭호 (모르는 id는 버림)
     p.unlocked[0] = true;
     return p;
   }
@@ -113,6 +127,7 @@
       isCount(p.hits) && isCount(p.atBats) && p.hits <= p.atBats && isCount(p.games) &&
       (p.daily === undefined || isDaily(p.daily)) &&
       (p.missions === undefined || isCount(p.missions)) &&
+      (p.titles === undefined || (Array.isArray(p.titles) && p.titles.every((t) => typeof t === 'string'))) &&
       (p.bats === undefined || isBats(p.bats))
     );
   }
@@ -178,7 +193,8 @@
   // ---- 게임 결과 ----
   // 일반 게임: 통산(안타/타수) 누적, 최고 타율, 다음 레벨 해제.
   // 챌린지: 그날 첫 판만 daily에 기록하고, 미션을 달성했으면 누적 달성 횟수 +1
-  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date, missionDone }) {
+  // titles: 이번 판에서 조건을 만족한 칭호 id (일반 게임만 반영). 결과의 newTitles는 처음 얻은 것
+  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date, missionDone, titles }) {
     const r = normalizeRecord(record);
     const p = r.players[key];
     if (!p) throw new Error('없는 타자: ' + key);
@@ -194,8 +210,10 @@
           p.missions++;
         }
       }
-      return { record: r, official, newRecord: false, unlockedLevel: null, careerBefore, careerAfter: careerBefore };
+      return { record: r, official, newRecord: false, unlockedLevel: null, careerBefore, careerAfter: careerBefore, newTitles: [] };
     }
+    const newTitles = normalizeTitles(titles).filter((id) => !p.titles.includes(id));
+    p.titles = normalizeTitles(p.titles.concat(newTitles));
     p.hits += hits;
     p.atBats += atBats;
     const prev = p.best[levelIndex];
@@ -208,7 +226,7 @@
       p.unlocked[next] = true;
       unlockedLevel = next;
     }
-    return { record: r, official: true, newRecord, unlockedLevel, careerBefore, careerAfter: careerAvg(p) };
+    return { record: r, official: true, newRecord, unlockedLevel, careerBefore, careerAfter: careerAvg(p), newTitles };
   }
 
   // ---- 가져오기 병합 ----
@@ -235,6 +253,7 @@
       }
       p.games = Math.max(p.games, q.games);
       p.missions = Math.max(p.missions, q.missions);
+      p.titles = normalizeTitles(p.titles.concat(q.titles)); // 칭호는 합집합
       if (!p.daily || (q.daily && q.daily.date > p.daily.date)) p.daily = q.daily ? clone(q.daily) : p.daily;
     }
     return r;
@@ -301,7 +320,7 @@
   const api = {
     normalizeName, playerKey, defaultPlayer, defaultRecord, normalizeRecord, validateRecord,
     ensurePlayer, careerAvg, rankPlayers, deletePlayer, applyGameResult, mergeRecords,
-    exportRecord, importRecordText,
+    exportRecord, importRecordText, topTitle,
     storage: { load, save, clear },
   };
   if (isNode) module.exports = api;

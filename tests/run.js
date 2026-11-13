@@ -791,6 +791,91 @@ section('경기 후 분석');
   });
 }
 
+section('승부처 · 칭호 · 타자 유리');
+{
+  const { clutchTargets, clutchState, earnedTitles } = require('../js/game.js');
+  test('승부처 목표: 다음 레벨이 잠겨 있으면 해제, 최고 타율이 있으면 갱신', () => {
+    const p = S.defaultPlayer('가');
+    assert.deepEqual(clutchTargets(p, 0, CONFIG).map((t) => [t.kind, t.hits]), [['unlock', 4]]);
+    p.unlocked[1] = true;
+    p.best[0] = 0.5;
+    assert.deepEqual(clutchTargets(p, 0, CONFIG).map((t) => [t.kind, t.hits]), [['record', 6]]);
+    p.best[2] = 1;
+    assert.deepEqual(clutchTargets(p, 2, CONFIG), []); // 마지막 레벨·10할은 목표 없음
+  });
+  test('승부처: 남은 타석 2 이하이고 남은 타석 안에 닿을 때만', () => {
+    const T = [{ kind: 'unlock', hits: 4, label: 'Lv.2 해제' }, { kind: 'record', hits: 6, label: '최고 타율 갱신' }];
+    assert.equal(clutchState(T, 3, 7, CONFIG), null); // 남은 3타석
+    assert.deepEqual(clutchState(T, 3, 8, CONFIG), { kind: 'unlock', label: 'Lv.2 해제', need: 1, remaining: 2 });
+    assert.deepEqual(clutchState(T, 2, 8, CONFIG), { kind: 'unlock', label: 'Lv.2 해제', need: 2, remaining: 2 }); // 남은 2타석 모두 안타면
+    assert.equal(clutchState(T, 2, 9, CONFIG), null); // 2개 필요, 1타석 남음
+    assert.equal(clutchState(T, 1, 9, CONFIG), null); // 3개 필요, 1타석 남음 → 불가
+    assert.deepEqual(clutchState(T, 5, 9, CONFIG), { kind: 'record', label: '최고 타율 갱신', need: 1, remaining: 1 }); // 해제는 이미 달성
+    assert.equal(clutchState(T, 6, 9, CONFIG), null);
+    assert.equal(clutchState(null, 3, 9, CONFIG), null);
+  });
+  test('게임: 승부처 타석에 atbat 이벤트, 클러치 상태 노출', () => {
+    const g = newGame(['OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'OUT_BIP', 'SINGLE', 'SINGLE', 'SINGLE', 'OUT_BIP', 'OUT_BIP'], {
+      targets: [{ kind: 'unlock', hits: 4, label: 'Lv.2 해제' }],
+    });
+    for (let i = 0; i < 8; i++) playPitch(g);
+    const ev = g.drainEvents().filter((e) => e.type === 'atbat');
+    assert.equal(ev.length, 8);
+    assert.equal(ev[6].clutch, null); // 8번째 타석 시작: 남은 3
+    assert.deepEqual(ev[7].clutch, { kind: 'unlock', label: 'Lv.2 해제', need: 1, remaining: 2 });
+    assert.equal(g.clutch().need, 1);
+  });
+  test('칭호: 조건을 모두 만족할 때만, 레벨 조건, 챌린지는 없음', () => {
+    const base = { hits: 3, homers: 0, perfects: 0, strikeouts: 0, chases: 0, doubles: 0, singles: 3, outs: 7, levelIndex: 0, mode: 'normal', atBatLog: ['SINGLE', 'OUT_BIP', 'SINGLE', 'OUT_BIP', 'SINGLE'] };
+    assert.deepEqual(earnedTitles(base, CONFIG), ['contact']);
+    const big = Object.assign({}, base, { hits: 5, homers: 3, chases: 1, strikeouts: 1, levelIndex: 2, atBatLog: ['HOMERUN', 'HOMERUN', 'HOMERUN', 'SINGLE', 'SINGLE'] });
+    assert.deepEqual(earnedTitles(big, CONFIG), ['slugger', 'lv3', 'streak']);
+    assert.deepEqual(earnedTitles(Object.assign({}, big, { levelIndex: 1 }), CONFIG), ['slugger', 'streak']);
+    assert.deepEqual(earnedTitles(Object.assign({}, big, { mode: 'challenge' }), CONFIG), []);
+  });
+  test('칭호 저장: 새로 얻은 것만 newTitles, 중복 없음, 모르는 id 버림, 병합은 합집합', () => {
+    let r = S.ensurePlayer(S.defaultRecord(), '가').record;
+    let a = S.applyGameResult(r, { playerKey: '가', levelIndex: 0, hits: 3, atBats: 10, mode: 'normal', date: '2026-11-13', titles: ['contact', 'zzz'] });
+    assert.deepEqual(a.newTitles, ['contact']);
+    a = S.applyGameResult(a.record, { playerKey: '가', levelIndex: 0, hits: 3, atBats: 10, mode: 'normal', date: '2026-11-13', titles: ['contact', 'slugger'] });
+    assert.deepEqual(a.newTitles, ['slugger']);
+    assert.deepEqual(a.record.players['가'].titles, ['slugger', 'contact']); // 귀한 순
+    assert.equal(S.topTitle(a.record.players['가']).id, 'slugger');
+    const c = S.applyGameResult(a.record, { playerKey: '가', levelIndex: 0, hits: 3, atBats: 10, mode: 'challenge', date: '2026-11-13', titles: ['perfect'] });
+    assert.deepEqual(c.newTitles, []);
+    assert.deepEqual(S.normalizeRecord({ v: 2, players: { x: { name: 'x', titles: ['eye', 'nope', 'eye'] } } }).players.x.titles, ['eye']);
+    const other = S.ensurePlayer(S.defaultRecord(), '가').record;
+    other.players['가'].titles = ['eye'];
+    assert.deepEqual(S.mergeRecords(a.record, other).players['가'].titles, ['slugger', 'eye', 'contact']);
+    const bad = JSON.parse(S.exportRecord(a.record));
+    bad.players['가'].titles = 'slugger';
+    assert.equal(S.validateRecord(bad), null);
+    assert.equal(S.topTitle(S.defaultPlayer('나')), null);
+  });
+  test('타자 유리(볼 3개): 좋음 구간이 BALL.advantageGood로 넓어짐, 확률표는 그대로', () => {
+    const d = (CONFIG.JUDGE.timing.good + CONFIG.BALL.advantageGood) / 2;
+    assert.equal(timingGrade(d, CONFIG), 'BAD');
+    assert.equal(timingGrade(d, CONFIG, CONFIG.BALL.advantageGood), 'GOOD');
+    const lv = CONFIG.LEVELS[0];
+    const a = judge({ cell: { row: 1, col: 1 }, deltaSec: d }, { row: 1, col: 1 }, lv, createRng(5), CONFIG, { advantage: true });
+    assert.equal(a.timing, 'GOOD');
+    const b = judge({ cell: { row: 1, col: 1 }, deltaSec: d }, { row: 1, col: 1 }, lv, createRng(5), CONFIG);
+    assert.equal(b.timing, 'BAD');
+  });
+  test('게임: 볼 3개면 advantage, 판정 함수에 전달', () => {
+    const seen = [];
+    const g = createGame({
+      levelIndex: 0, pitchSeed: 1, judgeSeed: 2,
+      judgeFn: (click, cell, level, rng, cfg, ctx) => {
+        seen.push(ctx.advantage);
+        return seen.length <= 3 ? { result: 'BALL', timing: 'NONE' } : { result: 'SINGLE', timing: 'GOOD' };
+      },
+    });
+    for (let i = 0; i < 4; i++) playPitch(g);
+    assert.deepEqual(seen, [false, false, false, true]);
+  });
+}
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {

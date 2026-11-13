@@ -288,7 +288,9 @@
     app.game = BB.createGame({
       levelIndex: setup.levelIndex, level: setup.level, mission: setup.mission, mode,
       pitchSeed: setup.pitchSeed, judgeSeed: setup.judgeSeed, playerName: p.name, bats: p.bats,
+      targets: mode === 'normal' ? BB.clutchTargets(p, levelIndex) : null, // 승부처 목표 (해제·최고 타율)
     });
+    audio.setAmbienceBoost(false);
     if (mode === 'normal') app.lastLevel = levelIndex;
     app.screen = 'game';
     app.lastFrameTs = null;
@@ -304,7 +306,7 @@
     if (!player) return goTitle(); // 게임 중 타자가 사라진 경우(정상 흐름에선 없음)
     const applied = BB.applyGameResult(app.record, {
       playerKey: key, levelIndex: g.levelIndex, hits: summary.hits, atBats: C.AT_BATS_PER_GAME, mode: g.mode, date,
-      missionDone: summary.missionDone,
+      missionDone: summary.missionDone, titles: summary.titles,
     });
     setRecord(applied.record);
     app.result = Object.assign(

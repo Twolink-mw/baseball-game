@@ -10,13 +10,13 @@
     return Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
   }
 
-  // deltaSec = 클릭 시각 - 공 도착 시각
-  function timingGrade(deltaSec, config) {
+  // deltaSec = 클릭 시각 - 공 도착 시각. goodSec를 주면 '좋음' 구간 대신 사용 (볼 골라낸 보상)
+  function timingGrade(deltaSec, config, goodSec) {
     const C = config || CONFIG;
     if (deltaSec == null || deltaSec > C.GRACE_SEC) return 'NONE';
     const a = Math.abs(deltaSec);
     if (a <= C.JUDGE.timing.perfect) return 'PERFECT';
-    if (a <= C.JUDGE.timing.good) return 'GOOD';
+    if (a <= (goodSec || C.JUDGE.timing.good)) return 'GOOD';
     return 'BAD';
   }
 
@@ -27,9 +27,11 @@
 
   // click: { cell, deltaSec } | null
   // 볼을 그냥 보내면 BALL. 볼에 휘두르면 볼 위치와 가까운 칸(D=1)만 맞힐 수 있다 (파울·범타·헛스윙)
-  function judge(click, pitchCell, level, rng, config) {
+  // ctx.advantage: 볼을 MAX_BALLS개 골라낸 타자 유리 카운트 → '좋음' 구간이 BALL.advantageGood
+  function judge(click, pitchCell, level, rng, config, ctx) {
     const C = config || CONFIG;
-    const timing = click ? timingGrade(click.deltaSec, C) : 'NONE';
+    const goodSec = ctx && ctx.advantage ? C.BALL.advantageGood : null;
+    const timing = click ? timingGrade(click.deltaSec, C, goodSec) : 'NONE';
     if (timing === 'NONE') return { result: isBall(pitchCell) ? 'BALL' : 'LOOKING', timing };
     const D = cellDistance(click.cell, pitchCell);
     if (D === 0) {

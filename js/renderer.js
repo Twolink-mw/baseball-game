@@ -686,11 +686,42 @@
       return 1 + (c1 + 1) * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
     }
 
+    // 승부처 문구: '안타 하나면 Lv.3 해제!'
+    function clutchText(c) {
+      if (c.need === 1) return '안타 하나면 ' + c.label + '!';
+      if (c.need === c.remaining) return '남은 ' + c.remaining + '타석 모두 안타면 ' + c.label + '!';
+      return '안타 ' + c.need + '개면 ' + c.label + '!';
+    }
+
+    // 타석 중 위쪽 가운데 알림: 승부처, 타자 유리(볼 3개). 결과 연출·타석 소개 중에는 숨김
+    function drawStatusPill(g) {
+      if (g.phase === 'RESULT_SHOW' || g.phase === 'AT_BAT_INTRO' || g.phase === 'GAME_OVER') return;
+      const parts = [];
+      const c = g.clutch && g.clutch();
+      if (c) parts.push(['승부처 · ' + clutchText(c), '#ffd34d']);
+      if (g.advantage && g.advantage()) parts.push(['타자 유리 · 스트라이크만!', '#7cf29a']);
+      // 한 줄에 하나씩 쌓음 (가로로 길면 오른쪽 전광판을 가림)
+      parts.forEach(([s, col], i) => {
+        ctx.font = 'bold 18px ' + FONT;
+        const w = ctx.measureText(s).width + 40;
+        const y = 78 + i * 40;
+        roundRect(640 - w / 2, y, w, 34, 17);
+        ctx.fillStyle = 'rgba(10,15,25,0.78)';
+        ctx.fill();
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        text(s, 640, y + 17, 18, col, 'center', 'bold');
+      });
+    }
+
     function drawCenterMessage(g) {
       if (g.phase === 'AT_BAT_INTRO') {
         const e = g.phaseElapsed();
         ctx.globalAlpha = clamp01(e / 0.2) * clamp01((C.AT_BAT_INTRO_SEC - e) / 0.2 + 0.3);
         outlined(g.atBat + '번째 타석', 640, 150 - 10 * clamp01(e / 0.3), 44, '#fff');
+        const c = g.clutch && g.clutch();
+        if (c) outlined(clutchText(c), 640, 204, 32, '#ffd34d');
         ctx.globalAlpha = 1;
         return;
       }
@@ -752,6 +783,7 @@
       const logX = touch && !padLeft ? 16 : LOG_X_RIGHT;
       drawPitchLog(g, logX);
       drawBubble(g);
+      drawStatusPill(g);
       drawCenterMessage(g);
       if (touch) {
         button('pause', L.width - 150, 8, 140, 56, '일시정지', { size: 20 });
@@ -779,10 +811,11 @@
       outlined('타자 시점 야구', 640, 56, 52, '#fff');
       text('코스가 보이면, 공이 도착하는 순간에 맞춰 누르세요', 640, 104, 20, '#cfe', 'center');
 
-      // 현재 타자 배너
-      const bx = 640 - 330;
+      // 현재 타자 배너 (대표 칭호 포함)
+      const BW = 780;
+      const bx = 640 - BW / 2;
       const by = 128;
-      roundRect(bx, by, 660, 54, 12);
+      roundRect(bx, by, BW, 54, 12);
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.fill();
       const p = view.player;
@@ -791,10 +824,19 @@
         text(p.bats === 'L' ? '좌타' : '우타', bx + 20, by + 27, 18, '#9cf', 'left', 'bold');
         text(p.name, bx + 68, by + 27, 24, '#ffd34d', 'left', 'bold');
         text('통산 ' + (career === null ? '-' : BB.formatAvg(career)) + ' (' + p.atBats + '타수)', bx + 270, by + 27, 18, '#dde', 'left');
+        const t = BB.topTitle(p);
+        if (t) {
+          // 이름 바로 옆에 자리가 있으면 거기, 아니면 통산 타율 뒤
+          ctx.font = 'bold 24px ' + FONT;
+          const nx = bx + 68 + ctx.measureText(p.name).width + 10;
+          ctx.font = 'bold 16px ' + FONT;
+          const pw = ctx.measureText(t.name).width + 16;
+          titlePill(t.name, nx + pw <= bx + 262 ? nx : bx + 470, by + 27, 16);
+        }
       } else {
         text('타자 이름을 정해 주세요', bx + 20, by + 27, 20, '#ffd34d', 'left', 'bold');
       }
-      button('changeBatter', bx + 660 - 140, by + 7, 130, 40, p ? '타자 변경' : '이름 입력', { size: 18, primary: !p });
+      button('changeBatter', bx + BW - 140, by + 7, 130, 40, p ? '타자 변경' : '이름 입력', { size: 18, primary: !p });
 
       const rec = view.playerData;
       const cw = 300;
@@ -859,6 +901,21 @@
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
     }
 
+    // 칭호 표시: 왼쪽 가운데(x, cy)부터 테두리 있는 작은 글자. 폭을 돌려줌
+    function titlePill(name, x, cy, size) {
+      ctx.font = 'bold ' + size + 'px ' + FONT;
+      const w = ctx.measureText(name).width + size;
+      const h = size + 10;
+      roundRect(x, cy - h / 2, w, h, h / 2);
+      ctx.fillStyle = 'rgba(255,211,77,0.16)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,211,77,0.85)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      text(name, x + w / 2, cy + 1, size, '#ffe9a0', 'center', 'bold');
+      return w;
+    }
+
     // 타자 기록(순위표)
     function drawPlayers(view) {
       drawBackdrop(view.now, 'rgba(8,14,26,0.86)');
@@ -893,6 +950,14 @@
           avgOr(p.best[0]), avgOr(p.best[1]), avgOr(p.best[2]), String(p.games),
         ];
         vals.forEach((v, k) => text(v, cols[k][1], cy, k === 1 || k === 2 ? 22 : 19, k === 2 ? '#ffd34d' : '#fff', cols[k][2], k <= 2 ? 'bold' : 'normal'));
+        // 대표 칭호: 이름 오른쪽 (통산 타율 칸과 겹치지 않을 때만)
+        const t = BB.topTitle(p);
+        if (t) {
+          ctx.font = 'bold 22px ' + FONT;
+          const nx = cols[1][1] + ctx.measureText(p.name).width + 10;
+          ctx.font = 'bold 14px ' + FONT;
+          if (nx + ctx.measureText(t.name).width + 14 < cols[2][1] - 32) titlePill(t.name, nx, cy, 14);
+        }
         hits.push({ id: 'player:' + p.key, x: 60, y, w: 1000, h: 46 });
         button('delete:' + p.key, 1080, y + 3, 90, 40, '삭제', { size: 16, noMin: true });
       });
@@ -1029,6 +1094,10 @@
         badge(C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a', r.newRecord ? 1.1 : 0.8);
         y += 46;
       }
+      if (r.newTitles && r.newTitles.length) {
+        badge('칭호 획득! ' + titleNames(r.newTitles), '#ffe9a0', 1.4);
+        y += 46;
+      }
       if (s.mission) {
         if (s.missionDone) badge('미션 달성! ' + s.mission.text + (r.official ? '' : ' (연습)'), '#7cf29a', 0.8);
         else text('미션 실패 · ' + s.mission.text, 640, y, 26, '#ff8a8a', 'center', 'bold');
@@ -1049,6 +1118,12 @@
       buttons.push(['menu', '메뉴로', false]);
       const total = buttons.length * bw + (buttons.length - 1) * 24;
       buttons.forEach(([id, label, primary], i) => button(id, (L.width - total) / 2 + i * (bw + 24), by, bw, 64, label, { primary }));
+    }
+
+    // 칭호 id 목록 → '거포 · 선구안' (3개 이상이면 '거포 외 2개')
+    function titleNames(ids) {
+      const names = ids.map((id) => (C.TITLES.find((t) => t.id === id) || { name: id }).name);
+      return names.length > 2 ? names[0] + ' 외 ' + (names.length - 1) + '개' : names.join(' · ');
     }
 
     // 타석별 결과를 색 칸으로 한 줄에 (가운데 cx, 위쪽 y)
@@ -1124,7 +1199,15 @@
         if (s.mission && s.missionDone) badges.push(['미션 달성! ' + s.mission.text, '#7cf29a']);
         if (r.newRecord) badges.push(['NEW RECORD', '#ff6b6b']);
         if (r.unlockedLevel !== null) badges.push([C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a']);
-        badges.forEach(([str, col], i) => outlined(str, 640 + (i - (badges.length - 1) / 2) * 360, 600, 40, col));
+        if (r.newTitles && r.newTitles.length) badges.push(['칭호 ' + titleNames(r.newTitles), '#ffe9a0']);
+        const bs = badges.length > 2 ? 32 : 40;
+        badges.forEach(([str, col], i) => outlined(str, 640 + (i - (badges.length - 1) / 2) * (badges.length > 2 ? 400 : 360), 600, bs, col));
+        // 대표 칭호 (이름 아래)
+        const t = BB.topTitle(r.player);
+        if (t) {
+          ctx.font = 'bold 20px ' + FONT;
+          titlePill(t.name, 640 - (ctx.measureText(t.name).width + 20) / 2, 104, 20);
+        }
       } finally {
         ctx = savedCtx;
         hits = savedHits;

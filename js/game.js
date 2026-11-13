@@ -75,6 +75,46 @@
     return { value, done, failed: !done && decided };
   }
 
+  // ---- 승부처 ----
+  // 이 타자가 이번 판에서 노릴 목표: 다음 레벨 해제(잠겨 있을 때), 최고 타율 갱신(기록이 있을 때). 해제가 먼저
+  function clutchTargets(player, levelIndex, config) {
+    const C = config || BB.CONFIG;
+    const N = C.AT_BATS_PER_GAME;
+    const out = [];
+    const next = levelIndex + 1;
+    if (player && next < C.LEVELS.length && !player.unlocked[next]) {
+      out.push({ kind: 'unlock', hits: Math.ceil(C.UNLOCK_AVG[levelIndex] * N - 1e-9), label: C.LEVELS[next].name + ' 해제' });
+    }
+    const best = player && player.best[levelIndex];
+    if (best !== null && best !== undefined && best < 1) {
+      out.push({ kind: 'record', hits: Math.floor(best * N + 1e-9) + 1, label: '최고 타율 갱신' });
+    }
+    return out;
+  }
+
+  // 지금 타석이 승부처인지: 남은 타석(지금 타석 포함)이 maxRemaining 이하이고, 남은 타석 안에 닿을 수 있는 목표
+  // → { kind, label, need, remaining } 또는 null
+  function clutchState(targets, hits, atBatsDone, config) {
+    const C = config || BB.CONFIG;
+    const remaining = C.AT_BATS_PER_GAME - atBatsDone;
+    if (!targets || remaining < 1 || remaining > C.CLUTCH.maxRemaining) return null;
+    for (const t of targets) {
+      const need = t.hits - hits;
+      if (need >= 1 && need <= remaining) return { kind: t.kind, label: t.label, need, remaining };
+    }
+    return null;
+  }
+
+  // ---- 칭호 ----
+  // 일반 게임 요약(summary)으로 얻은 칭호 id 목록 (TITLES 순서)
+  function earnedTitles(summary, config) {
+    const C = config || BB.CONFIG;
+    if (summary.mode !== 'normal') return [];
+    return C.TITLES.filter(
+      (t) => (!t.level || t.level === summary.levelIndex + 1) && t.conds.every((c) => missionProgress(c, summary, summary.atBatLog, true).done)
+    ).map((t) => t.id);
+  }
+
   // ---- 경기 후 분석 ----
   // 투구 기록(history)을 코스·구종·타이밍·선구안으로 집계하고 한 줄 평을 만든다 (순수 함수)
   const ROW_NAMES = ['높은 공', '가운데 높이 공', '낮은 공'];
@@ -181,6 +221,7 @@
       levelIndex: opts.levelIndex,
       mode: opts.mode || 'normal',
       mission: opts.mission || null, // 챌린지 미션
+      targets: opts.targets || null, // 승부처 목표 (clutchTargets)
       playerName: opts.playerName || '', // 표시용
       bats: opts.bats === 'L' ? 'L' : 'R', // 표시용: 우타(R) / 좌타(L)
       phase: 'AT_BAT_INTRO',
@@ -251,8 +292,19 @@
         return g.mission ? missionProgress(g.mission, g.stats, g.atBatLog, g.phase === 'GAME_OVER') : null;
       },
 
+      // 지금 타석이 승부처면 { kind, label, need, remaining }
+      clutch() {
+        if (g.phase === 'GAME_OVER') return null;
+        return clutchState(g.targets, g.stats.hits, g.atBatLog.length, C);
+      },
+
+      // 볼을 MAX_BALLS개 골라내 타자 유리 (이후 스트라이크만, '좋음' 구간 넓어짐)
+      advantage() {
+        return g.balls >= C.MAX_BALLS;
+      },
+
       summary() {
-        return Object.assign({}, g.stats, {
+        const s = Object.assign({}, g.stats, {
           atBatLog: g.atBatLog.slice(), // 타석별 결과 (HOMERUN/DOUBLE/SINGLE/OUT_BIP/STRIKEOUT)
           mission: g.mission,
           missionDone: g.mission ? missionProgress(g.mission, g.stats, g.atBatLog, true).done : false,
@@ -263,6 +315,8 @@
           levelIndex: g.levelIndex,
           mode: g.mode,
         });
+        s.titles = earnedTitles(s, C); // 이번 판에서 조건을 만족한 칭호 (일반 게임만)
+        return s;
       },
 
       drainEvents() {
@@ -333,7 +387,7 @@
     function resolve() {
       enter('RESOLVE', g.time);
       const click = g.click ? { cell: g.click.cell, deltaSec: g.click.atTime - g.arrivalTime } : null;
-      const j = judgeFn(click, g.pitch.cell, g.level, judgeRng, C);
+      const j = judgeFn(click, g.pitch.cell, g.level, judgeRng, C, { advantage: g.advantage() });
       const applied = g.applyResult(j.result, j.timing);
       if (click && BB.isBallCell(g.pitch.cell)) g.stats.chases++;
       g.last = Object.assign(applied, {
@@ -361,6 +415,7 @@
         g.balls = 0;
         g.pitchInAtBat = 0;
         enter('AT_BAT_INTRO', g.phaseStart + resultDuration());
+        g.events.push({ type: 'atbat', clutch: g.clutch() }); // 승부처면 관중 소리를 키움
         return;
       }
       startPitch(g.phaseStart + resultDuration());
@@ -394,7 +449,10 @@
     return g;
   }
 
-  const api = { createGame, formatAvg, challengeSeeds, challengeSetup, missionProgress, hitStreak, analyze };
+  const api = {
+    createGame, formatAvg, challengeSeeds, challengeSetup, missionProgress, hitStreak, analyze,
+    clutchTargets, clutchState, earnedTitles,
+  };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);
 })(typeof window !== 'undefined' ? window : globalThis);

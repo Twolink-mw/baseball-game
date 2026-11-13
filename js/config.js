@@ -11,7 +11,24 @@
     BALL: {
       outCells: 0.8, // 볼이 존 가장자리에서 몇 칸 바깥에 꽂히는지(공 중심). 0.5면 바로 옆 칸 가운데. 휴대폰 확대 존에서 아래 볼이 화면 안에 들도록 0.8
       revealMult: 1.3, // 볼은 스트라이크보다 이 배수만큼 일찍 실제 코스로 휘기 시작 (판정에는 영향 없음)
+      // 볼을 골라낸 보상: 볼이 MAX_BALLS개면(이후 스트라이크만 옴) '좋음' 타이밍 구간을 넓힘. 확률표는 그대로
+      advantageGood: 0.14, // JUDGE.timing.good(0.12) 대신
     },
+
+    // 승부처: 남은 타석이 maxRemaining 이하이고 안타 몇 개면 레벨 해제/최고 타율 갱신일 때 알림 + 관중 소리 키움
+    CLUTCH: { maxRemaining: 2 },
+
+    // 칭호: 일반 게임 한 판의 기록으로 획득(타자별 영구). 앞에 있을수록 귀함 → 대표 칭호
+    // conds: 모두 만족해야 함. stat은 미션과 같음(+ chases: 볼에 스윙한 횟수). level: 해당 레벨(1부터)에서만
+    TITLES: [
+      { id: 'perfect', name: '10할 타자', desc: '한 경기 10안타', conds: [{ stat: 'hits', min: 10 }] },
+      { id: 'slugger', name: '거포', desc: '한 경기 홈런 3개', conds: [{ stat: 'homers', min: 3 }] },
+      { id: 'lv3', name: '파이어볼러 킬러', desc: 'Lv.3에서 타율 .500 이상', level: 3, conds: [{ stat: 'hits', min: 5 }] },
+      { id: 'streak', name: '안타 제조기', desc: '5타석 연속 안타', conds: [{ stat: 'hitStreak', min: 5 }] },
+      { id: 'sharp', name: '정밀 타격', desc: '한 경기 정확 타이밍 6번', conds: [{ stat: 'perfects', min: 6 }] },
+      { id: 'eye', name: '선구안', desc: '볼에 한 번도 스윙하지 않고 4안타 이상', conds: [{ stat: 'chases', max: 0 }, { stat: 'hits', min: 4 }] },
+      { id: 'contact', name: '컨택 장인', desc: '삼진 없이 3안타 이상', conds: [{ stat: 'strikeouts', max: 0 }, { stat: 'hits', min: 3 }] },
+    ],
     MAX_PITCHES_PER_AT_BAT: 12, // 이 투구수 이상에서 파울이면 범타 처리
     // 다음 레벨 해제 기준 타율. [i] = Lv.(i+1)에서 이 타율 이상이면 Lv.(i+2) 해제
     // 모두 .400 (10타석 4안타). 플레이 피드백·시뮬레이션으로 .300에서 상향
@@ -159,6 +176,7 @@
       volume: 0.8, // 전체 음량
       reverb: { seconds: 1.6, decay: 3, wet: 0.35 }, // 구장 잔향: 길이, 감쇠 곡선, 섞는 비율
       ambience: 0.09, // 경기 중 관중 웅성거림 배경음
+      clutchAmbience: 2.2, // 승부처 타석에서 웅성거림 배수
       crowd: 0.25, // 관중 함성·박수 기준 음량
       // 나무 배트 공명 모드 [주파수 Hz, 울림 시간 초, 상대 크기]. 높은 모드는 정타일 때만 강하게 울림
       batModes: [[540, 0.09, 1], [1220, 0.07, 0.7], [1980, 0.05, 0.55], [2760, 0.04, 0.4], [3650, 0.03, 0.3]],

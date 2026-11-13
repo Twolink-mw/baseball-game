@@ -21,6 +21,7 @@
     let muted = false;
     let ambWanted = false;
     let amb = null; // 배경 웅성거림 { gain, stop(), kind, target }
+    let ambBoost = 1; // 승부처 타석이면 AUDIO.clutchAmbience
     const samples = {}; // 슬롯 → 디코딩한 AudioBuffer
     const sampleState = {}; // 슬롯 → 'loading' | 'ready' | 'error'
     const rng = BB.createRng(4242); // 장식용 (게임 RNG와 무관)
@@ -423,7 +424,13 @@
         }
         amb = { gain: g, kind: 'synth', target: A.ambience, stop: () => nodes.forEach((n) => n.stop()) };
       }
-      if (amb) amb.gain.gain.setTargetAtTime(on ? amb.target : 0.0001, ctx.currentTime, on ? 0.6 : 0.3);
+      if (amb) amb.gain.gain.setTargetAtTime(on ? amb.target * ambBoost : 0.0001, ctx.currentTime, on ? 0.6 : 0.3);
+    }
+
+    // 승부처 타석: 웅성거림을 키움 (다음 타석에서 원래대로)
+    function setAmbienceBoost(on) {
+      ambBoost = on ? A.clutchAmbience : 1;
+      if (ambWanted) setAmbience(true);
     }
 
     // ---- 이름으로 재생 (게임 이벤트와 소리 확인 페이지에서 사용) ----
@@ -467,8 +474,10 @@
 
     // 게임 이벤트 → 효과음
     function onGameEvent(e) {
+      if (e.type === 'atbat') ambBoost = e.clutch ? A.clutchAmbience : 1; // 소리가 아직 준비 전이어도 기억
       if (!ready()) return;
-      if (e.type === 'release') play('pitch');
+      if (e.type === 'atbat') setAmbienceBoost(!!e.clutch);
+      else if (e.type === 'release') play('pitch');
       else if (e.type === 'swing') play('swing');
       else if (e.type === 'result') {
         const last = e.last;
@@ -536,7 +545,7 @@
       if (ctx && !offline && ctx.state === 'suspended') ctx.resume();
     }
 
-    return { unlock, setMuted, setAmbience, onGameEvent, fanfare, play, sampleStatus, suspend, resume, isMuted: () => muted };
+    return { unlock, setMuted, setAmbience, setAmbienceBoost, onGameEvent, fanfare, play, sampleStatus, suspend, resume, isMuted: () => muted };
   }
 
   Object.assign(BB, { createAudio });
