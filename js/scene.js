@@ -440,12 +440,37 @@
   }
 
   // ---- 타자 (화면 오른쪽, 등 쪽에서 본 모습) ----
+  // 배트 스윗 스폿(배트 길이의 이 비율 지점)이 존 통과 순간 목표 칸 중심을 지나게 한다
+  const SWEET = 0.8;
+
+  // 목표(타자 그림 좌표, 좌타 기준)로 배트를 보내려면 존 통과 자세의 손을 얼마나 옮겨야 하는지
+  function batAim(target) {
+    const B = L.batter;
+    const k = BAT_KEYS[2];
+    const hx = B.x + k[1];
+    const hy = B.y + k[2];
+    const len = 190 * k[4] * SWEET;
+    const px = hx + Math.cos(k[3]) * len;
+    const py = hy + Math.sin(k[3]) * len;
+    const clamp = (v, m) => Math.max(-m, Math.min(m, v));
+    return { dx: clamp(target.x - px, 180), dy: clamp(target.y - py, 160) };
+  }
+
   // swing: 0(준비) → 1(팔로스루). null이면 준비 자세
-  function drawBatter(c, swing) {
+  // o: { target(누른 칸 중심, 좌타 그림 좌표), idleT(초, 대기 중 배트 까딱임), stride(0~1, 앞발 들기),
+  //      react: { kind: 'admire'|'drop'|'slump', t(초) } 결과 반응, runDir(1루 쪽 x 방향: 1 또는 -1) }
+  function drawBatter(c, swing, o) {
+    o = o || {};
     const B = L.batter;
     const s = swing === null ? 0 : swing;
     const bs = Math.min(1, s / 0.45); // 몸통 회전 진행도
+    const aim = o.target ? batAim(o.target) : null;
+    const react = o.react || null;
+    const rk = (t0, dur) => (react ? Math.max(0, Math.min(1, (react.t - t0) / dur)) : 0);
+    // 안타: 배트를 놓고 1루 쪽으로 출발 (그림 전체를 옮김)
+    const run = react && react.kind === 'drop' ? rk(0.45, 1.2) : 0;
     c.save();
+    c.translate((o.runDir || 1) * 90 * run * run, -18 * run);
     c.lineCap = 'round';
     c.lineJoin = 'round';
     const bx = B.x;
@@ -455,11 +480,14 @@
     c.beginPath();
     c.ellipse(bx, by + 4, 90, 16, 0, 0, Math.PI * 2);
     c.fill();
-    // 다리: 스윙하면서 앞발(왼쪽)로 체중 이동
-    const hip = { x: bx - 4 - 22 * bs, y: by - 150 };
-    const fL = { x: bx - 56, y: by };
+    // 낮은 공은 몸을 낮추고 높은 공은 세움 (스윙할 때만)
+    const lean = aim ? aim.dy * 0.12 * bs : 0;
+    // 다리: 스윙하면서 앞발(왼쪽)로 체중 이동. 투구 동작 중에는 앞발을 살짝 들어 타이밍을 잡음
+    const st = o.stride || 0;
+    const hip = { x: bx - 4 - 22 * bs, y: by - 150 + lean - 6 * st };
+    const fL = { x: bx - 56 + 10 * st, y: by - 22 * st };
     const fR = { x: bx + 48, y: by - 2 * bs };
-    const kL = { x: bx - 48 - 6 * bs, y: by - 76 };
+    const kL = { x: bx - 48 - 6 * bs + 8 * st, y: by - 76 - 26 * st };
     const kR = { x: bx + 36 - 14 * bs, y: by - 72 + 6 * bs };
     const leg = (k, f, col) => {
       c.strokeStyle = col;
@@ -476,8 +504,11 @@
     };
     leg(kR, fR, '#d2d5dc');
     leg(kL, fL, '#e3e5eb');
-    // 몸통: 등 번호 없는 남색 유니폼, 스윙 때 왼쪽으로 회전
-    const sh = { x: bx - 2 - 34 * bs, y: by - 262 + 6 * bs };
+    // 결과 반응: 삼진이면 어깨가 처지고, 홈런이면 공을 올려다봄
+    const slump = react && react.kind === 'slump' ? rk(0.25, 0.5) : 0;
+    const admire = react && react.kind === 'admire' ? rk(0.45, 0.8) : 0;
+    // 몸통: 남색 유니폼, 스윙 때 왼쪽으로 회전
+    const sh = { x: bx - 2 - 34 * bs, y: by - 262 + 6 * bs + lean * 1.4 + 10 * slump - 6 * st };
     const torsoW = 74 - 18 * Math.sin(bs * Math.PI);
     c.fillStyle = '#24345a';
     c.beginPath();
@@ -489,12 +520,27 @@
     c.fill();
     c.fillStyle = 'rgba(255,255,255,0.08)';
     c.fillRect(hip.x - 30, hip.y - 4, 60, 10); // 벨트 부분
-    // 손 위치와 배트 각도 (키프레임 보간)
-    const { hand, ang, len } = batPose(bx, by, s);
+    // 손 위치와 배트 각도 (키프레임 보간, 누른 칸 쪽으로 보정)
+    let { hand, ang, len } = batPose(bx, by, s, aim);
+    if (swing === null && !react) {
+      // 대기: 배트를 천천히 까딱임
+      const w = Math.sin((o.idleT || 0) * 3.1);
+      hand = { x: hand.x + 2 * w, y: hand.y + 3 * w - 4 * st };
+      ang += 0.07 * Math.sin((o.idleT || 0) * 3.1 + 0.6) - 0.12 * st;
+    }
+    // 반응: 손과 배트를 쉬는 자세로 내림
+    const rest = (k, hx2, hy2, a2) => {
+      hand = { x: hand.x + (bx + hx2 - hand.x) * k, y: hand.y + (by + hy2 - hand.y) * k };
+      ang += (a2 - ang) * k;
+    };
+    if (slump) rest(slump, 14, -196, 1.2); // 삼진: 배트 끝을 땅으로 축 늘어뜨림
+    if (admire) rest(admire, -20, -215, -0.35);
+    const drop = react && react.kind === 'drop' ? rk(0.2, 0.35) : 0;
+    if (drop) rest(drop, 10, -205, ang);
     // 배트 잔상: 조금 전 스윙 자세들
     if (swing !== null && swing > 0 && swing < 1) {
       for (let g = 1; g <= 3; g++) {
-        const prev = batPose(bx, by, Math.max(0, s - g * 0.07));
+        const prev = batPose(bx, by, Math.max(0, s - g * 0.07), aim);
         drawBat(c, prev.hand, prev.ang, 0.2 / g, prev.len);
       }
     }
@@ -505,7 +551,11 @@
     c.moveTo(sh.x + torsoW / 2 - 8, sh.y + 14);
     c.quadraticCurveTo(sh.x + torsoW / 2 + 10, sh.y + 50, hand.x, hand.y);
     c.stroke();
-    drawBat(c, hand, ang, 1, len);
+    if (drop) {
+      // 안타: 배트를 옆으로 놓음 (떨어지며 사라짐)
+      const fall = { x: hand.x - 30 * drop, y: hand.y + 120 * drop * drop };
+      drawBat(c, fall, ang + 1.6 * drop, 1 - drop, len);
+    } else drawBat(c, hand, ang, 1, len);
     c.beginPath();
     c.moveTo(sh.x - torsoW / 2 + 8, sh.y + 14);
     c.quadraticCurveTo(sh.x - 10, sh.y + 56, hand.x, hand.y);
@@ -514,9 +564,9 @@
     c.beginPath();
     c.arc(hand.x, hand.y, 11, 0, Math.PI * 2);
     c.fill();
-    // 헬멧(뒤에서 본 모습)
+    // 헬멧(뒤에서 본 모습): 삼진이면 고개 숙임, 홈런이면 고개 듦
     const hx = sh.x + 6 - 10 * bs;
-    const hy = sh.y - 34;
+    const hy = sh.y - 34 + 8 * slump - 6 * admire;
     c.fillStyle = '#c99a72'; // 목
     c.fillRect(hx - 10, hy + 14, 20, 20);
     const hg = c.createRadialGradient(hx - 8, hy - 10, 4, hx, hy, 34);
@@ -542,15 +592,21 @@
     [1, -62, -300, -1.95, 0.6], // 팔로스루: 어깨 위로 감김
   ];
 
-  function batPose(bx, by, s) {
+  // 키프레임별로 누른 칸 보정(aim)을 얼마나 적용할지: 존 통과에 100%, 앞뒤는 절반
+  const AIM_W = [0, 0.5, 1, 0.5, 0.15];
+
+  function batPose(bx, by, s, aim) {
     let k = 1;
     while (k < BAT_KEYS.length - 1 && s > BAT_KEYS[k][0]) k++;
     const a = BAT_KEYS[k - 1];
     const b = BAT_KEYS[k];
     const u = Math.max(0, Math.min(1, (s - a[0]) / (b[0] - a[0])));
+    const w = aim ? AIM_W[k - 1] + (AIM_W[k] - AIM_W[k - 1]) * u : 0;
+    // 높은 공은 배트 끝이 살짝 들리고, 낮은 공은 내려감
+    const tilt = aim ? -aim.dy * 0.0012 * w : 0;
     return {
-      hand: { x: bx + a[1] + (b[1] - a[1]) * u, y: by + a[2] + (b[2] - a[2]) * u },
-      ang: a[3] + (b[3] - a[3]) * u,
+      hand: { x: bx + a[1] + (b[1] - a[1]) * u + (aim ? aim.dx * w : 0), y: by + a[2] + (b[2] - a[2]) * u + (aim ? aim.dy * w : 0) },
+      ang: a[3] + (b[3] - a[3]) * u + tilt,
       len: a[4] + (b[4] - a[4]) * u,
     };
   }

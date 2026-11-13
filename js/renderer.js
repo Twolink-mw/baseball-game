@@ -296,20 +296,45 @@
       S.drawPitcher(ctx, S.pitcherPose(g.phase, el, el));
     }
 
-    function drawBatter(g) {
+    // 결과에 따른 타자 반응 (그 타석이 끝난 결과만)
+    function batterReact(g) {
+      if (g.phase !== 'RESULT_SHOW' || !g.last) return null;
+      const last = g.last;
+      let kind = null;
+      if (last.result === 'HOMERUN') kind = 'admire';
+      else if (HITS[last.result]) kind = 'drop';
+      else if (last.atBatOutcome === 'STRIKEOUT') kind = 'slump';
+      return kind ? { kind, t: g.phaseElapsed() } : null;
+    }
+
+    function drawBatter(g, now) {
       let swing = null;
       if (g.click && (g.phase === 'PITCH_FLIGHT' || g.phase === 'RESULT_SHOW')) {
         swing = clamp01((g.time - g.click.atTime) / FX.swingSec);
       }
       // 그림은 좌타자(화면 오른쪽, 1루 쪽) 기준. 우타자는 좌우를 뒤집어 화면 왼쪽(3루 쪽)에 그린다
-      if (g.bats === 'R') {
+      const mirror = g.bats === 'R';
+      // 누른 칸 중심을 그림 좌표로 (우타자는 뒤집힌 좌표)
+      let target = null;
+      if (g.click) {
+        const p = cellCenter(g.click.cell);
+        target = { x: mirror ? L.width - p.x : p.x, y: p.y };
+      }
+      // 투구 동작 후반에 앞발을 살짝 들었다가 릴리스에 내림 (타이밍 잡기)
+      let stride = 0;
+      if (g.phase === 'PITCH_WINDUP' && g.pitch) {
+        const m = (g.phaseElapsed() - g.pitch.holdSec) / g.pitch.motionSec;
+        if (m > 0.35 && m < 1) stride = Math.sin(Math.PI * ((m - 0.35) / 0.65));
+      }
+      const opts = { target, idleT: g.paused ? 0 : now, stride, react: batterReact(g), runDir: mirror ? -1 : 1 };
+      if (mirror) {
         ctx.save();
         ctx.translate(L.width, 0);
         ctx.scale(-1, 1);
-        S.drawBatter(ctx, swing);
+        S.drawBatter(ctx, swing, opts);
         ctx.restore();
       } else {
-        S.drawBatter(ctx, swing);
+        S.drawBatter(ctx, swing, opts);
       }
     }
 
@@ -837,7 +862,7 @@
       drawBackdrop(now, null, g.level.mood);
       drawBoard(g, now);
       drawPitcher(g);
-      drawBatter(g);
+      drawBatter(g, now);
       drawZone(g, view.hover);
       drawBall(g);
       drawClickMarker(g);
