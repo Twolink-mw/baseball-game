@@ -945,6 +945,7 @@
       if (view.player) {
         const days = BB.recentDays(rec, view.today, C.CHALLENGE.logDays);
         const sq = 16;
+        text('최근 ' + days.length + '일 참여 (오른쪽이 오늘)', cx + 18, cy + 12, 11, '#cbb', 'left');
         days.forEach((d, i) => {
           const x = cx + 18 + i * (sq + 5);
           roundRect(x, cy + 22, sq, sq, 4);
