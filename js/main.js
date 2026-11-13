@@ -13,6 +13,10 @@
     lastStart: null, // 다시하기용 { levelIndex, mode, opts }
     practiceOpts: { levelIndex: 0, type: null, balls: true, row: null, col: null }, // 연습 설정 (저장 안 함). row/col: 코스 고정
     pauseAnalysis: false, // 연습 일시정지 중 분석 보기
+    shownScreen: null, // 화면 전환 페이드: 마지막으로 그린 화면
+    fadeStart: 0,
+    pointer: null, // 마우스 위치(버튼 hover)
+    pressed: null, // 방금 누른 버튼 { id, at }
     record: BB.storage.load(),
     game: null,
     result: null,
@@ -471,7 +475,10 @@
     onPointerDown(x, y, ts) {
       if (dialogOpen()) return;
       for (const h of app.hits) {
-        if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return doAction(h.id);
+        if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) {
+          app.pressed = { id: h.id, at: performance.now() };
+          return doAction(h.id);
+        }
       }
       if (app.screen === 'game') {
         const cell = renderer.cellAt(x, y);
@@ -480,6 +487,7 @@
     },
     onPointerMove(x, y, type) {
       app.hover = type === 'mouse' && app.screen === 'game' ? renderer.cellAt(x, y) : null;
+      app.pointer = type === 'mouse' && x >= 0 ? { x, y } : null;
     },
     onCellKey(cell, ts) {
       if (app.screen === 'game') swingAt(cell, ts);
@@ -692,6 +700,12 @@
     }
     updatePad();
     if (app.toast && performance.now() > app.toast.until) app.toast = null;
+    // 화면이 바뀌면 페이드 시작 (일시정지·탭 전환은 화면이 같으므로 해당 없음)
+    if (app.screen !== app.shownScreen) {
+      app.shownScreen = app.screen;
+      app.fadeStart = ts;
+    }
+    const fade = Math.max(0, 1 - (ts - app.fadeStart) / 1000 / C.FX.fadeSec);
     const player = currentPlayer();
     app.hits = renderer.draw({
       screen: app.screen,
@@ -712,6 +726,9 @@
       isFullscreen: !!fsElement(),
       iosHint: isIOS,
       toast: app.toast ? app.toast.text : null,
+      fade,
+      pointer: app.pointer,
+      pressed: app.pressed ? { id: app.pressed.id, age: (performance.now() - app.pressed.at) / 1000 } : null,
     });
     global.requestAnimationFrame(frame);
   }

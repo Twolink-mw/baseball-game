@@ -54,6 +54,8 @@
     let touch = false; // 터치 기기 배치(큰 버튼, 존 확대)
     let zoneScale = 1;
     let minTap = 0; // 버튼 최소 높이(논리 px)
+    let pointer = null; // 마우스 위치(논리 좌표, 버튼 hover용). 터치면 null
+    let pressed = null; // 방금 누른 버튼 { id, age(초) }
 
     // 안전 영역(노치/홈바) 크기 (CSS 변수 --sa-*)
     function safeArea() {
@@ -208,11 +210,18 @@
         h = minTap;
       }
       const disabled = !!opts.disabled;
+      // 반응: 마우스를 올리면 밝게, 누르면 잠깐 더 밝게
+      const hot = !disabled && pointer && pointer.x >= x && pointer.x < x + w && pointer.y >= y && pointer.y < y + h;
+      const down = !disabled && pressed && pressed.id === id && pressed.age < FX.pressSec;
       roundRect(x, y, w, h, 10);
-      ctx.fillStyle = disabled ? 'rgba(60,60,60,0.8)' : opts.primary ? '#2f7de1' : 'rgba(20,30,45,0.85)';
+      ctx.fillStyle = disabled
+        ? 'rgba(60,60,60,0.8)'
+        : opts.primary
+          ? down ? '#7ab4ff' : hot ? '#4a91f0' : '#2f7de1'
+          : down ? 'rgba(90,115,150,0.95)' : hot ? 'rgba(42,58,84,0.92)' : 'rgba(20,30,45,0.85)';
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = disabled ? '#555' : 'rgba(255,255,255,0.5)';
+      ctx.strokeStyle = disabled ? '#555' : hot || down ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.5)';
       ctx.stroke();
       text(label, x + w / 2, y + h / 2, opts.size || 22, disabled ? '#888' : '#fff', 'center', 'bold');
       if (!disabled) hits.push({ id, x, y, w, h });
@@ -1384,6 +1393,8 @@
 
     function draw(view) {
       hits = [];
+      pointer = view.pointer || null;
+      pressed = view.pressed || null;
       const k = canvas.width / LW;
       ctx.setTransform(k, 0, 0, canvas.height / L.height, ox * k, 0);
       ctx.clearRect(-ox, 0, LW, L.height);
@@ -1393,6 +1404,11 @@
       else if (view.screen === 'players') drawPlayers(view);
       else if (view.screen === 'modes') drawModes(view);
       if (view.toast) drawToast(view.toast);
+      // 화면 전환: 새 화면 위의 검은 덮개가 걷힘
+      if (view.fade > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (view.fade * view.fade).toFixed(3) + ')';
+        ctx.fillRect(-ox, 0, LW, L.height);
+      }
       return hits;
     }
 
