@@ -878,6 +878,23 @@
       ctx.lineWidth = 2;
       ctx.stroke();
       text('오늘의 챌린지 ' + view.today.slice(5).replace('-', '/'), 640, cy + 30, 26, '#ffd34d', 'center', 'bold');
+      // 최근 7일 칸(왼쪽 위: 초록=미션 달성, 노랑=참여, 빈칸=안 함, 밝은 테두리=오늘)과 연속 참여 일수(오른쪽 위)
+      if (view.player) {
+        const days = BB.recentDays(rec, view.today, C.CHALLENGE.logDays);
+        const sq = 16;
+        days.forEach((d, i) => {
+          const x = cx + 18 + i * (sq + 5);
+          roundRect(x, cy + 22, sq, sq, 4);
+          ctx.fillStyle = d.entry ? (d.entry.mission ? '#7cf29a' : '#ffd34d') : 'rgba(255,255,255,0.08)';
+          ctx.fill();
+          ctx.strokeStyle = d.date === view.today ? '#fff' : 'rgba(255,255,255,0.35)';
+          ctx.lineWidth = d.date === view.today ? 2 : 1;
+          ctx.stroke();
+        });
+        const streak = BB.currentStreak(rec, view.today);
+        if (streak > 0) text('연속 ' + streak + '일', cx + 582, cy + 30, 20, '#ffb24d', 'right', 'bold');
+        else if (rec.streakBest > 0) text('최고 연속 ' + rec.streakBest + '일', cx + 582, cy + 30, 16, '#ccd', 'right');
+      }
       text('투수 ' + ch.pitcher.name + ' ' + ch.level.baseSpeed + 'km · ' + ch.pitcher.desc, 640, cy + 64, 18, '#fff', 'center', 'bold');
       const played = rec.daily && rec.daily.date === view.today;
       const missionStr = '미션 ' + ch.mission.text + (played ? (rec.daily.mission ? ' ✓ 달성' : ' ✗') : '');
@@ -1102,6 +1119,11 @@
         if (s.missionDone) badge('미션 달성! ' + s.mission.text + (r.official ? '' : ' (연습)'), '#7cf29a', 0.8);
         else text('미션 실패 · ' + s.mission.text, 640, y, 26, '#ff8a8a', 'center', 'bold');
         y += 46;
+        const streak = BB.currentStreak(r.player, r.date);
+        if (r.official && streak > 0) {
+          text('챌린지 연속 ' + streak + '일째' + (r.player.streakBest > streak ? ' (최고 ' + r.player.streakBest + '일)' : streak > 1 ? ' · 최고 기록!' : ''), 640, y - 6, 22, '#ffb24d', 'center', 'bold');
+          y += 34;
+        }
       }
       const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + ' · 홈런 ' + s.homers + ')';
       const line2 = '삼진 ' + s.strikeouts + ' · 범타 ' + s.outs + ' · 총 투구수 ' + s.totalPitches + ' · 정확 타이밍 ' + s.perfects;

@@ -248,6 +248,8 @@
       const EMOJI = { HOMERUN: '🟥', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
       msg += '\n' + s.atBatLog.map((o) => EMOJI[o] || '⬜').join('');
       msg += '\n미션 ' + s.mission.text + (s.missionDone ? ' 달성!' : ' 실패');
+      const streak = BB.currentStreak(r.player, r.date);
+      if (r.official && streak > 1) msg += ' · 연속 ' + streak + '일째';
     }
     const filename = 'bbgame-' + r.date + '-' + r.playerName + '.png';
     card.toBlob((blob) => {

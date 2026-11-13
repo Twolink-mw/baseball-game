@@ -876,6 +876,68 @@ section('승부처 · 칭호 · 타자 유리');
   });
 }
 
+section('챌린지 연속 참여');
+{
+  const play = (rec, date, mission, hits) =>
+    S.applyGameResult(rec, { playerKey: '가', levelIndex: 1, hits: hits == null ? 3 : hits, atBats: 10, mode: 'challenge', date, missionDone: !!mission }).record;
+  const fresh = () => S.ensurePlayer(S.defaultRecord(), '가').record;
+  test('날짜 계산: 월말·연말·윤년', () => {
+    assert.equal(S.prevDate('2026-03-01'), '2026-02-28');
+    assert.equal(S.prevDate('2028-03-01'), '2028-02-29');
+    assert.equal(S.prevDate('2027-01-01'), '2026-12-31');
+    assert.equal(S.shiftDate('2026-12-31', 1), '2027-01-01');
+  });
+  test('연속: 어제 했으면 +1, 하루 빠지면 1부터, 같은 날 재도전은 그대로', () => {
+    let r = play(fresh(), '2026-12-30');
+    r = play(r, '2026-12-31', true);
+    r = play(r, '2027-01-01');
+    let p = r.players['가'];
+    assert.equal(p.streak, 3);
+    assert.equal(S.currentStreak(p, '2027-01-01'), 3);
+    assert.equal(S.currentStreak(p, '2027-01-02'), 3); // 아직 오늘 안 해도 이어지는 중
+    assert.equal(S.currentStreak(p, '2027-01-03'), 0); // 끊김
+    r = play(r, '2027-01-01', false, 9); // 연습 판
+    assert.equal(r.players['가'].streak, 3);
+    r = play(r, '2027-01-03');
+    p = r.players['가'];
+    assert.equal(p.streak, 1);
+    assert.equal(p.streakBest, 3);
+    assert.deepEqual(p.dailyLog.map((e) => [e.date, e.mission]), [['2026-12-30', false], ['2026-12-31', true], ['2027-01-01', false], ['2027-01-03', false]]);
+    assert.equal(p.dailyLog[2].avg, 0.3); // 연습 판은 기록 안 됨
+  });
+  test('최근 기록은 logDays개만, 최근 7일 칸', () => {
+    let r = fresh();
+    for (let d = 1; d <= 10; d++) r = play(r, '2026-11-' + String(d).padStart(2, '0'), d % 2 === 0);
+    const p = r.players['가'];
+    assert.equal(p.dailyLog.length, CONFIG.CHALLENGE.logDays);
+    assert.equal(p.dailyLog[0].date, '2026-11-04');
+    const days = S.recentDays(p, '2026-11-12', 7);
+    assert.deepEqual(days.map((d) => d.date.slice(8)), ['06', '07', '08', '09', '10', '11', '12']);
+    assert.deepEqual(days.map((d) => (d.entry ? (d.entry.mission ? 'M' : 'P') : '-')).join(''), 'MPMPM--');
+  });
+  test('이전 저장본(daily만 있음)은 1일로, 잘못된 값 검증, 병합', () => {
+    const old = S.normalizeRecord({ v: 2, players: { 가: { name: '가', daily: { date: '2026-11-12', avg: 0.4, mission: true } } } });
+    assert.equal(old.players['가'].streak, 1);
+    assert.deepEqual(old.players['가'].dailyLog, [{ date: '2026-11-12', avg: 0.4, mission: true }]);
+    assert.equal(S.currentStreak(old.players['가'], '2026-11-13'), 1);
+    const bad = JSON.parse(S.exportRecord(old));
+    bad.players['가'].dailyLog = [{ date: 'x', avg: 0.1 }];
+    assert.equal(S.validateRecord(bad), null);
+    bad.players['가'].dailyLog = [];
+    bad.players['가'].streak = -1;
+    assert.equal(S.validateRecord(bad), null);
+    // 병합: 마지막 공식 판이 늦은 쪽의 연속, 최근 기록은 합침, 최고 연속은 큰 값
+    let a = play(play(fresh(), '2026-11-01'), '2026-11-02'); // 연속 2
+    let b = play(play(play(fresh(), '2026-11-08'), '2026-11-09'), '2026-11-10'); // 연속 3
+    b.players['가'].streakBest = 5;
+    const m = S.mergeRecords(a, b).players['가'];
+    assert.equal(m.streak, 3);
+    assert.equal(m.streakBest, 5);
+    assert.deepEqual(m.dailyLog.map((e) => e.date.slice(8)), ['01', '02', '08', '09', '10']);
+    assert.equal(S.mergeRecords(b, a).players['가'].streak, 3);
+  });
+}
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {

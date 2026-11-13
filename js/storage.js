@@ -29,7 +29,46 @@
   function defaultPlayer(name) {
     const unlocked = new Array(NLEVELS).fill(false);
     unlocked[0] = true;
-    return { name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0, titles: [] };
+    return {
+      name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0, titles: [],
+      streak: 0, streakBest: 0, dailyLog: [], // 챌린지 연속 참여 일수(마지막 공식 판 기준), 최고 연속, 최근 공식 판 기록
+    };
+  }
+
+  // ---- 날짜 (기기 로컬 날짜 문자열 'YYYY-MM-DD') ----
+  function shiftDate(dateStr, days) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1, d + days));
+    const p = (n) => String(n).padStart(2, '0');
+    return t.getUTCFullYear() + '-' + p(t.getUTCMonth() + 1) + '-' + p(t.getUTCDate());
+  }
+  const prevDate = (dateStr) => shiftDate(dateStr, -1);
+
+  // 오늘 기준 연속 참여 일수: 마지막 공식 판이 오늘이나 어제면 저장된 streak, 아니면 끊김(0)
+  function currentStreak(player, today) {
+    if (!player || !player.daily) return 0;
+    const last = player.daily.date;
+    return last === today || last === prevDate(today) ? player.streak || 0 : 0;
+  }
+
+  // 최근 days일 (오래된 날 → 오늘): [{ date, entry: {date, avg, mission} | null }]
+  function recentDays(player, today, days) {
+    const out = [];
+    const log = (player && player.dailyLog) || [];
+    for (let i = days - 1; i >= 0; i--) {
+      const date = shiftDate(today, -i);
+      out.push({ date, entry: log.find((e) => e.date === date) || null });
+    }
+    return out;
+  }
+
+  const isLogEntry = (e) => !!e && typeof e === 'object' && DATE_RE.test(e.date) && isAvg(e.avg) && e.avg !== null && (e.mission === undefined || typeof e.mission === 'boolean');
+  // 날짜순·날짜 중복 없이(앞에 나온 것 우선), 최근 logDays개
+  function normalizeLog(list) {
+    if (!Array.isArray(list)) return [];
+    const byDate = new Map();
+    for (const e of list) if (isLogEntry(e) && !byDate.has(e.date)) byDate.set(e.date, { date: e.date, avg: e.avg, mission: e.mission === true });
+    return Array.from(byDate.values()).sort((a, b) => (a.date < b.date ? -1 : 1)).slice(-CONFIG.CHALLENGE.logDays);
   }
 
   // 칭호 id 목록 정리: 아는 id만, 중복 없이, TITLES 순서(귀한 순)
@@ -74,6 +113,17 @@
     }
     if (isCount(obj.missions)) p.missions = obj.missions; // 챌린지 미션 누적 달성 횟수
     p.titles = normalizeTitles(obj.titles); // 칭호 (모르는 id는 버림)
+    if (isCount(obj.streak)) p.streak = obj.streak;
+    p.streakBest = Math.max(p.streak, isCount(obj.streakBest) ? obj.streakBest : 0);
+    p.dailyLog = normalizeLog(obj.dailyLog);
+    // 연속 기록이 생기기 전 저장본: 마지막 챌린지 기록을 1일로 본다
+    if (p.daily && p.streak === 0) {
+      p.streak = 1;
+      p.streakBest = Math.max(1, p.streakBest);
+    }
+    if (p.daily && !p.dailyLog.some((e) => e.date === p.daily.date)) {
+      p.dailyLog = normalizeLog(p.dailyLog.concat([{ date: p.daily.date, avg: p.daily.avg, mission: !!p.daily.mission }]));
+    }
     p.unlocked[0] = true;
     return p;
   }
@@ -128,6 +178,9 @@
       (p.daily === undefined || isDaily(p.daily)) &&
       (p.missions === undefined || isCount(p.missions)) &&
       (p.titles === undefined || (Array.isArray(p.titles) && p.titles.every((t) => typeof t === 'string'))) &&
+      (p.streak === undefined || isCount(p.streak)) &&
+      (p.streakBest === undefined || isCount(p.streakBest)) &&
+      (p.dailyLog === undefined || (Array.isArray(p.dailyLog) && p.dailyLog.every(isLogEntry))) &&
       (p.bats === undefined || isBats(p.bats))
     );
   }
@@ -204,6 +257,10 @@
     if (mode === 'challenge') {
       const official = !p.daily || p.daily.date !== date;
       if (official) {
+        // 연속 참여: 직전 공식 판이 어제면 +1, 아니면 1부터
+        p.streak = p.daily && p.daily.date === prevDate(date) ? p.streak + 1 : 1;
+        p.streakBest = Math.max(p.streakBest, p.streak);
+        p.dailyLog = normalizeLog(p.dailyLog.concat([{ date, avg, mission: !!missionDone }]));
         p.daily = { date, avg };
         if (missionDone) {
           p.daily.mission = true;
@@ -254,6 +311,10 @@
       p.games = Math.max(p.games, q.games);
       p.missions = Math.max(p.missions, q.missions);
       p.titles = normalizeTitles(p.titles.concat(q.titles)); // 칭호는 합집합
+      // 연속 참여는 마지막 공식 판이 늦은 쪽, 최근 기록은 날짜별 합침, 최고 연속은 큰 값
+      if (q.daily && (!p.daily || q.daily.date > p.daily.date)) p.streak = q.streak;
+      p.streakBest = Math.max(p.streakBest, q.streakBest, p.streak);
+      p.dailyLog = normalizeLog(p.dailyLog.concat(q.dailyLog));
       if (!p.daily || (q.daily && q.daily.date > p.daily.date)) p.daily = q.daily ? clone(q.daily) : p.daily;
     }
     return r;
@@ -320,7 +381,7 @@
   const api = {
     normalizeName, playerKey, defaultPlayer, defaultRecord, normalizeRecord, validateRecord,
     ensurePlayer, careerAvg, rankPlayers, deletePlayer, applyGameResult, mergeRecords,
-    exportRecord, importRecordText, topTitle,
+    exportRecord, importRecordText, topTitle, shiftDate, prevDate, currentStreak, recentDays,
     storage: { load, save, clear },
   };
   if (isNode) module.exports = api;
