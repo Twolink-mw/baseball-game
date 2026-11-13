@@ -12,6 +12,7 @@
 
   const RESULT_TEXT = {
     HOMERUN: '홈런!',
+    TRIPLE: '3루타!',
     DOUBLE: '2루타!',
     SINGLE: '안타!',
     FOUL: '파울',
@@ -20,16 +21,17 @@
     LOOKING: '루킹 스트라이크',
     BALL: '볼',
   };
-  const HITS = { HOMERUN: 1, DOUBLE: 1, SINGLE: 1 };
+  const HITS = { HOMERUN: 1, TRIPLE: 1, DOUBLE: 1, SINGLE: 1 };
   // 타석별 결과 격자 (챌린지 결과·공유 카드)
   const GRID = {
     HOMERUN: ['홈런', '#ff5a5a', '#fff'],
+    TRIPLE: ['3루타', '#b46cff', '#fff'],
     DOUBLE: ['2루타', '#ff9f43', '#111'],
     SINGLE: ['안타', '#ffd34d', '#111'],
     OUT_BIP: ['범타', '#8b97a8', '#111'],
     STRIKEOUT: ['삼진', '#262d3a', '#ff8a8a'],
   };
-  const BOARD_FLASH = { HOMERUN: 'HOME RUN!', DOUBLE: '2루타!', SINGLE: 'HIT!' };
+  const BOARD_FLASH = { HOMERUN: 'HOME RUN!', TRIPLE: '3루타!', DOUBLE: '2루타!', SINGLE: 'HIT!' };
 
   const lerp = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
   const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -404,6 +406,8 @@
       switch (last.result) {
         case 'HOMERUN':
           return { dur: 1.0, tx: 640 + d * 380, ty: 110, apex: 300, r1: 2 };
+        case 'TRIPLE': // 외야 구석 깊숙이 (2루타보다 멀리·옆으로)
+          return { dur: 1.0, tx: 640 + side * 360 + d * 300, ty: S.fenceY() - 4, apex: 200, r1: 2.5 };
         case 'DOUBLE':
           return { dur: 0.9, tx: 640 + side * 220 + d * 300, ty: S.fenceY() - 8, apex: 170, r1: 3 };
         case 'SINGLE':
@@ -602,8 +606,8 @@
     }
 
     // ---- 투구 기록 패널 (화면 오른쪽) ----
-    const LOG_LABEL = { HOMERUN: '홈런', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹', BALL: '볼' };
-    const LOG_COLOR = { HOMERUN: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a', BALL: '#4fd27a' };
+    const LOG_LABEL = { HOMERUN: '홈런', TRIPLE: '3루타', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹', BALL: '볼' };
+    const LOG_COLOR = { HOMERUN: '#ffd34d', TRIPLE: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a', BALL: '#4fd27a' };
 
     // 타석 결과 한마디 (직전 타석 제목용)
     function atBatOutcomeLabel(list) {
@@ -1296,7 +1300,7 @@
           y += 34;
         }
       }
-      const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + ' · 홈런 ' + s.homers + ')';
+      const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + (s.triples ? ' · 3루타 ' + s.triples : '') + ' · 홈런 ' + s.homers + ')';
       const line2 = '삼진 ' + s.strikeouts + ' · 범타 ' + s.outs + ' · 총 투구수 ' + s.totalPitches + ' · 정확 타이밍 ' + s.perfects;
       text(line1, 640, y + 20, 24, '#fff', 'center');
       text(line2, 640, y + 58, 22, '#ccd', 'center');
@@ -1392,7 +1396,7 @@
         } else {
           text('이번 타율', 640, 280, 26, '#aab', 'center');
           outlined(BB.formatAvg(s.avg), 640, 370, 130, '#ffd34d');
-          text(s.hits + '안타 / ' + C.AT_BATS_PER_GAME + '타수 · 홈런 ' + s.homers + ' · 2루타 ' + s.doubles + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
+          text(s.hits + '안타 / ' + C.AT_BATS_PER_GAME + '타수 · 홈런 ' + s.homers + (s.triples ? ' · 3루타 ' + s.triples : '') + ' · 2루타 ' + s.doubles + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
         }
         if (s.mode === 'normal' && r.careerAfter !== null) {
           text('통산 타율 ' + BB.formatAvg(r.careerAfter) + ' (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, 520, 26, '#cde', 'center', 'bold');

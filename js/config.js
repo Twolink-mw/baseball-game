@@ -95,8 +95,9 @@
       timing: { perfect: 0.05, good: 0.12 },
       // D=0(코스 일치) 타이밍 등급별 결과 비중. 레벨에 exact를 두면 그 값이 우선한다.
       exact: {
-        PERFECT: { HOMERUN: 25, DOUBLE: 25, SINGLE: 30, OUT_BIP: 20, FOUL: 0 },
-        GOOD: { HOMERUN: 5, DOUBLE: 15, SINGLE: 35, OUT_BIP: 35, FOUL: 10 },
+        // 3루타는 2루타 몫에서 떼어 옴 (안타 합계·타율은 그대로)
+        PERFECT: { HOMERUN: 25, TRIPLE: 5, DOUBLE: 20, SINGLE: 30, OUT_BIP: 20, FOUL: 0 },
+        GOOD: { HOMERUN: 5, TRIPLE: 3, DOUBLE: 12, SINGLE: 35, OUT_BIP: 35, FOUL: 10 },
         BAD: { HOMERUN: 0, DOUBLE: 0, SINGLE: 10, OUT_BIP: 40, FOUL: 50 },
       },
     },
@@ -123,13 +124,13 @@
         { id: 'quick', name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] } },
         { id: 'breaking', name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 } },
       ],
-      // 오늘의 미션. stat: homers, hits, strikeouts, extraBases(2루타+홈런), perfects, hitStreak(연속 타석 안타), firstHit(첫 타석 안타 1/0)
+      // 오늘의 미션. stat: homers, hits, strikeouts, extraBases(2루타+3루타+홈런), perfects, hitStreak(연속 타석 안타), firstHit(첫 타석 안타 1/0)
       // min: 이 값 이상이면 달성, max: 게임이 끝났을 때 이 값 이하이면 달성
       missions: [
         { text: '홈런 1개', stat: 'homers', min: 1 },
         { text: '안타 5개 이상', stat: 'hits', min: 5 },
         { text: '삼진 2개 이하', stat: 'strikeouts', max: 2 },
-        { text: '장타(2루타·홈런) 2개', stat: 'extraBases', min: 2 },
+        { text: '장타(2루타 이상) 2개', stat: 'extraBases', min: 2 },
         { text: '정확 타이밍 4번', stat: 'perfects', min: 4 },
         { text: '3타석 연속 안타', stat: 'hitStreak', min: 3 },
         { text: '첫 타석 안타', stat: 'firstHit', min: 1 },

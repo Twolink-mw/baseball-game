@@ -8,7 +8,7 @@
     ? Object.assign({}, require('./config.js'), require('./rng.js'), require('./pitcher.js'), require('./judge.js'))
     : global.BB;
 
-  const HIT_RESULTS = { HOMERUN: 'homers', DOUBLE: 'doubles', SINGLE: 'singles' };
+  const HIT_RESULTS = { HOMERUN: 'homers', TRIPLE: 'triples', DOUBLE: 'doubles', SINGLE: 'singles' };
 
   function formatAvg(avg) {
     if (avg >= 1) return '1.000';
@@ -96,7 +96,7 @@
   function missionStat(stat, stats, atBatLog) {
     switch (stat) {
       case 'extraBases':
-        return stats.doubles + stats.homers;
+        return stats.doubles + (stats.triples || 0) + stats.homers;
       case 'hitStreak':
         return hitStreak(atBatLog);
       case 'firstHit':
@@ -288,7 +288,7 @@
       balls: 0, // 볼 카운트 (MAX_BALLS개가 되면 이후는 스트라이크만, 볼넷 없음)
       pitchInAtBat: 0,
       totalPitches: 0,
-      stats: { hits: 0, singles: 0, doubles: 0, homers: 0, strikeouts: 0, outs: 0, perfects: 0, chases: 0 }, // chases: 볼에 스윙한 횟수
+      stats: { hits: 0, singles: 0, doubles: 0, triples: 0, homers: 0, strikeouts: 0, outs: 0, perfects: 0, chases: 0 }, // chases: 볼에 스윙한 횟수
       atBatLog: [], // 타석별 결과
       pitchLog: [], // 던진 투구 순서
       history: [], // 투구별 결과 { atBat, n, type, speed, cell, clickCell, result, timing } (투구 기록 패널용)
@@ -383,7 +383,7 @@
 
       summary() {
         const s = Object.assign({}, g.stats, {
-          atBatLog: g.atBatLog.slice(), // 타석별 결과 (HOMERUN/DOUBLE/SINGLE/OUT_BIP/STRIKEOUT)
+          atBatLog: g.atBatLog.slice(), // 타석별 결과 (HOMERUN/TRIPLE/DOUBLE/SINGLE/OUT_BIP/STRIKEOUT)
           mission: g.mission,
           missionDone: g.mission ? missionProgress(g.mission, g.stats, g.atBatLog, true).done : false,
           pitcherName: g.mode === 'challenge' ? g.level.title : null,

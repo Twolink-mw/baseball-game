@@ -251,7 +251,7 @@
     else msg += BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
     if (s.mode === 'challenge') {
       // 타석별 결과 격자: 같은 날 같은 공을 상대했으니 타석끼리 비교할 수 있다
-      const EMOJI = { HOMERUN: '🟥', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
+      const EMOJI = { HOMERUN: '🟥', TRIPLE: '🟪', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
       msg += '\n' + s.atBatLog.map((o) => EMOJI[o] || '⬜').join('');
       msg += '\n미션 ' + s.mission.text + (s.missionDone ? ' 달성!' : ' 실패');
       const streak = BB.currentStreak(r.player, r.date);

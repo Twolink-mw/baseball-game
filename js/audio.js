@@ -487,6 +487,10 @@
             play('bat', { clean: 1, power: 1 });
             play('homerun', { delay: 0.15 });
             break;
+          case 'TRIPLE':
+            play('bat', { clean, power: 0.8 });
+            play('cheer', { intensity: 0.9, dur: 2.4, delay: 0.15 });
+            break;
           case 'DOUBLE':
             play('bat', { clean, power: 0.7 });
             play('cheer', { intensity: 0.75, dur: 2, delay: 0.15 });

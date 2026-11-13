@@ -86,7 +86,7 @@ test('미클릭이면 스트라이크는 루킹, 볼은 볼 (실제 판정 함�
   assert.equal(g.balls, g.pitch.ball ? 1 : 0);
 });
 
-for (const r of ['SINGLE', 'DOUBLE', 'HOMERUN', 'OUT_BIP']) {
+for (const r of ['SINGLE', 'DOUBLE', 'TRIPLE', 'HOMERUN', 'OUT_BIP']) {
   test(r + ' → 즉시 타석 종료', () => {
     const g = newGame([r]);
     const last = playPitch(g);
@@ -1056,6 +1056,21 @@ section('도전 모드');
     assert.deepEqual(m.boss, { wild: 0.6, curve: 0.5 });
   });
 }
+
+section('3루타');
+test('3루타: 안타로 집계, 장타 미션에 포함, 2루타 몫에서 떼어 와 안타 합계는 그대로', () => {
+  const g = newGame(['TRIPLE']);
+  playPitch(g);
+  assert.equal(g.stats.hits, 1);
+  assert.equal(g.stats.triples, 1);
+  assert.deepEqual(g.atBatLog, ['TRIPLE']);
+  const { missionProgress } = require('../js/game.js');
+  assert.equal(missionProgress({ stat: 'extraBases', min: 2 }, Object.assign({}, g.stats, { doubles: 1 }), g.atBatLog, false).done, true);
+  const hitSum = (t) => ['HOMERUN', 'TRIPLE', 'DOUBLE', 'SINGLE'].reduce((a, k) => a + (t[k] || 0), 0);
+  assert.equal(hitSum(CONFIG.JUDGE.exact.PERFECT), 80);
+  assert.equal(hitSum(CONFIG.JUDGE.exact.GOOD), 55);
+  assert.ok(CONFIG.JUDGE.exact.PERFECT.TRIPLE > 0 && CONFIG.JUDGE.exact.PERFECT.TRIPLE < CONFIG.JUDGE.exact.PERFECT.DOUBLE);
+});
 
 section('연습 코스 고정');
 {
