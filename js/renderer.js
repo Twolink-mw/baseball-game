@@ -945,57 +945,107 @@
         }
       });
 
-      // 오늘의 챌린지
-      const cx = 640 - 300;
-      const cy = 446;
+      // 아래 줄: 오늘의 챌린지(왼쪽) + 도전 모드(오른쪽). 레벨 카드 줄과 같은 폭
+      const rowX = x0;
+      const rowW = cw * 3 + gap * 2;
+      const cy = 436;
+      const chH = 160;
+      const chW = rowW - 360 - 24;
+      const cx = rowX;
       const ch = BB.challengeSetup(view.today);
-      roundRect(cx, cy, 600, 134, 16);
-      ctx.fillStyle = 'rgba(60,46,10,0.8)';
+      roundRect(cx, cy, chW, chH, 16);
+      ctx.fillStyle = 'rgba(60,46,10,0.82)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,211,77,0.8)';
       ctx.lineWidth = 2;
       ctx.stroke();
-      text('오늘의 챌린지 ' + view.today.slice(5).replace('-', '/'), 640, cy + 30, 26, '#ffd34d', 'center', 'bold');
-      // 최근 7일 칸(왼쪽 위: 초록=미션 달성, 노랑=참여, 빈칸=안 함, 밝은 테두리=오늘)과 연속 참여 일수(오른쪽 위)
+      text('오늘의 챌린지 ' + view.today.slice(5).replace('-', '/'), cx + 22, cy + 30, 24, '#ffd34d', 'left', 'bold');
+      text('투수 ' + ch.pitcher.name + ' ' + ch.level.baseSpeed + 'km · ' + ch.pitcher.desc, cx + 22, cy + 64, 17, '#fff', 'left', 'bold');
+      const played = rec.daily && rec.daily.date === view.today;
+      const missionStr = '미션 ' + ch.mission.text + (played ? (rec.daily.mission ? ' ✓ 달성' : ' ✗') : '');
+      text(missionStr, cx + 22, cy + 92, 17, played ? (rec.daily.mission ? '#7cf29a' : '#ff8a8a') : '#ffe9a0', 'left', 'bold');
+      // 맨 아래 줄: 최근 7일 칸(초록=미션 달성, 노랑=참여, 빈칸=안 함, 흰 테두리=오늘) + 오늘 기록/안내
+      const dy = cy + chH - 34; // 맨 아래 줄 위쪽
       if (view.player) {
+        const streak = BB.currentStreak(rec, view.today);
+        if (streak > 0) text('연속 ' + streak + '일', cx + chW - 22, cy + 30, 20, '#ffb24d', 'right', 'bold');
+        else if (rec.streakBest > 0) text('최고 연속 ' + rec.streakBest + '일', cx + chW - 22, cy + 30, 15, '#ccd', 'right');
         const days = BB.recentDays(rec, view.today, C.CHALLENGE.logDays);
-        const sq = 16;
-        text('최근 ' + days.length + '일 참여 (오른쪽이 오늘)', cx + 18, cy + 12, 11, '#cbb', 'left');
+        text('최근 7일', cx + 22, dy + 10, 14, '#cbb', 'left', 'bold');
+        const sq = 20;
         days.forEach((d, i) => {
-          const x = cx + 18 + i * (sq + 5);
-          roundRect(x, cy + 22, sq, sq, 4);
+          const x = cx + 90 + i * (sq + 6);
+          roundRect(x, dy, sq, sq, 5);
           ctx.fillStyle = d.entry ? (d.entry.mission ? '#7cf29a' : '#ffd34d') : 'rgba(255,255,255,0.08)';
           ctx.fill();
           ctx.strokeStyle = d.date === view.today ? '#fff' : 'rgba(255,255,255,0.35)';
           ctx.lineWidth = d.date === view.today ? 2 : 1;
           ctx.stroke();
         });
-        const streak = BB.currentStreak(rec, view.today);
-        if (streak > 0) text('연속 ' + streak + '일', cx + 582, cy + 30, 20, '#ffb24d', 'right', 'bold');
-        else if (rec.streakBest > 0) text('최고 연속 ' + rec.streakBest + '일', cx + 582, cy + 30, 16, '#ccd', 'right');
       }
-      text('투수 ' + ch.pitcher.name + ' ' + ch.level.baseSpeed + 'km · ' + ch.pitcher.desc, 640, cy + 64, 18, '#fff', 'center', 'bold');
-      const played = rec.daily && rec.daily.date === view.today;
-      const missionStr = '미션 ' + ch.mission.text + (played ? (rec.daily.mission ? ' ✓ 달성' : ' ✗') : '');
-      text(missionStr, 640, cy + 92, 18, played ? (rec.daily.mission ? '#7cf29a' : '#ff8a8a') : '#ffe9a0', 'center', 'bold');
       const d = played
-        ? '오늘 기록 ' + BB.formatAvg(rec.daily.avg) + ' (다시 하면 연습) · 미션 누적 ' + (rec.missions || 0) + '회'
-        : '모두 같은 투구 순서 · 첫 판만 기록 · 미션 누적 ' + (rec.missions || 0) + '회';
-      text(d, 640, cy + 118, 15, '#ccd', 'center');
-      hits.push({ id: 'challenge', x: cx, y: cy, w: 600, h: 134 });
+        ? '오늘 ' + BB.formatAvg(rec.daily.avg) + ' · 다시 하면 연습 · 미션 누적 ' + (rec.missions || 0) + '회'
+        : '첫 판만 기록 · 미션 누적 ' + (rec.missions || 0) + '회';
+      text(d, cx + chW - 22, dy + 10, 14, '#ccd', 'right');
+      hits.push({ id: 'challenge', x: cx, y: cy, w: chW, h: chH });
 
-      const hint = touch
-        ? '조작: 공이 오는 칸을 존에서 직접 누르거나, 화면 구석의 3×3 패드를 누르세요'
-        : '조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기';
-      text(hint, 640, 600, 16, '#bcd', 'center');
+      // 도전 모드 카드
+      const mx = cx + chW + 24;
+      const mw = 360;
+      roundRect(mx, cy, mw, chH, 16);
+      ctx.fillStyle = 'rgba(30,24,60,0.82)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(199,146,255,0.85)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      text('도전 모드', mx + mw / 2, cy + 32, 26, '#d9b8ff', 'center', 'bold');
+      text('서바이벌 · 홈런 더비 · 보스 · 연습', mx + mw / 2, cy + 66, 16, '#fff', 'center');
+      const pm = view.player ? view.player.modes : null;
+      const best = pm && (pm.survival != null || pm.derby != null)
+        ? '최고 · 서바이벌 ' + (pm.survival == null ? '-' : pm.survival + '개') + ' · 더비 ' + (pm.derby == null ? '-' : pm.derby + '개')
+        : '기록은 따로, 통산 타율엔 반영 안 됨';
+      text(best, mx + mw / 2, cy + 94, 14, '#bcd', 'center');
+      text('열기 ▶', mx + mw / 2, cy + 132, 20, '#8fd', 'center', 'bold');
+      hits.push({ id: 'modes', x: mx, y: cy, w: mw, h: chH });
+
+      // 조작 안내: PC는 키캡 그림, 터치는 글
+      if (touch) text('조작: 공이 오는 칸을 존에서 직접 누르거나, 화면 구석의 3×3 패드를 누르세요', 640, 618, 16, '#bcd', 'center');
+      else drawKeyHint(640, 618);
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
-      button('modes', 206, L.height - 70, 170, 50, '도전 모드', { size: 18, primary: true });
-      if (C.SHOW_BACKUP) button('backup', 392, L.height - 70, 170, 50, '기록 백업', { size: 18 });
+      if (C.SHOW_BACKUP) button('backup', 206, L.height - 70, 170, 50, '기록 백업', { size: 18 });
       muteButton(view, L.width - 46, 42, 52);
       if (view.canFullscreen) button('fullscreen', 20, 16, 150, 44, view.isFullscreen ? '전체화면 끄기' : '전체화면', { size: 18 });
-      if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 626, 15, '#9ab', 'center');
+      if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 642, 14, '#9ab', 'center');
 
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
+    }
+
+    // 키 안내 한 줄: 글자와 키캡을 섞어 가운데(cx) 정렬. tokens: 문자열 또는 ['키']
+    function drawKeyHint(cx, cy) {
+      const groups = (rows) => rows.flatMap((r, i) => (i ? [' / '] : []).concat(r.split('').map((k) => [k])));
+      const tokens = ['마우스로 칸 클릭 · 키보드 ']
+        .concat(groups(['789', '456', '123']), [' 또는 '], groups(['QWE', 'ASD', 'ZXC']), [' · '], [['M']], [' 소리']);
+      const KW = 20;
+      const size = 15;
+      ctx.font = size + 'px ' + FONT;
+      const width = tokens.reduce((a, t) => a + (typeof t === 'string' ? ctx.measureText(t).width : KW + 3), 0);
+      let x = cx - width / 2;
+      for (const t of tokens) {
+        if (typeof t === 'string') {
+          text(t, x, cy, size, '#bcd', 'left');
+          ctx.font = size + 'px ' + FONT;
+          x += ctx.measureText(t).width;
+        } else {
+          roundRect(x, cy - 11, KW, 22, 4);
+          ctx.fillStyle = 'rgba(255,255,255,0.12)';
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          text(t[0], x + KW / 2, cy + 1, 13, '#fff', 'center', 'bold');
+          x += KW + 3;
+        }
+      }
     }
 
     // ---- 도전 모드 화면: 서바이벌 · 홈런 더비 · 연습(위), 보스 투수(아래) ----
@@ -1039,21 +1089,14 @@
         const x = x0 + 2 * (cw + gap);
         const o = view.practiceOpts;
         modeCard(x, y, cw, h, '#7cc4ff');
-        text(M.practice.name, x + 24, y + 28, 28, '#7cc4ff', 'left', 'bold');
-        text('눌러서 바꾸기 · 기록 없음', x + cw - 20, y + 30, 14, '#9ab', 'right');
+        text(M.practice.name, x + cw / 2, y + 40, 32, '#7cc4ff', 'center', 'bold');
+        text(M.practice.desc, x + cw / 2, y + 80, 16, '#bcd', 'center');
+        // 지금 설정 요약 (바꾸기는 '설정' 패널에서)
         const lv = C.LEVELS[o.levelIndex];
-        // 좁은 카드에 두 줄이라 터치 최소 높이 확대(noMin)는 쓰지 않고 버튼 자체를 크게
-        const bw = (cw - 40 - 16) / 3;
-        button('popt:level', x + 20, y + 50, bw, 56, lv.name + ' ' + lv.baseSpeed, { size: 16, noMin: true });
-        button('popt:type', x + 20 + bw + 8, y + 50, bw, 56, o.type || '전 구종', { size: 16, noMin: true });
-        button('popt:balls', x + 20 + (bw + 8) * 2, y + 50, bw, 56, o.balls ? '볼 있음' : '볼 없음', { size: 16, noMin: true });
-        // 코스 고정: 높이 + 좌우 (둘 다 고르면 한 칸)
-        const hw = (cw - 40 - 8) / 2;
-        const ROWS = ['높은 공', '가운데', '낮은 공'];
-        const COLS = ['왼쪽', '가운데', '오른쪽'];
-        button('popt:row', x + 20, y + 112, hw, 56, '높이: ' + (o.row == null ? '전체' : ROWS[o.row]), { size: 16, noMin: true });
-        button('popt:col', x + 20 + hw + 8, y + 112, hw, 56, '좌우: ' + (o.col == null ? '전체' : COLS[o.col]), { size: 16, noMin: true });
-        button('practice', x + 60, y + 176, cw - 120, 44, '연습 시작 ▶', { primary: true, size: 20, noMin: true });
+        text(lv.name + ' ' + lv.baseSpeed + 'km · ' + (o.type || '전 구종') + ' · ' + (o.balls ? '볼 있음' : '볼 없음'), x + cw / 2, y + 116, 17, '#fff', 'center', 'bold');
+        text('코스 ' + practiceCourseLabel(o.cells), x + cw / 2, y + 144, 16, '#dde', 'center');
+        button('ppanel:open', x + 20, y + 168, 130, 50, '설정', { size: 18 });
+        button('practice', x + 162, y + 168, cw - 182, 50, '연습 시작 ▶', { primary: true, size: 19 });
       }
       // 보스 투수
       const by = 380;
@@ -1090,6 +1133,81 @@
       }
       button('title', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
       muteButton(view, L.width - 46, 42, 52);
+      if (view.practicePanel) drawPracticePanel(view.practiceOpts);
+    }
+
+    // 코스 고정 요약: 전체 / 낮은 공 / 왼쪽 / 칸 n개
+    function practiceCourseLabel(cells) {
+      if (!cells || !cells.length || cells.length === 9) return '전체';
+      const s = cells.slice().sort((a, b) => a - b).join();
+      const ROWS = ['높은 공', '가운데 높이', '낮은 공'];
+      const COLS = ['왼쪽', '가운데 세로줄', '오른쪽'];
+      for (let i = 0; i < 3; i++) {
+        if (s === [i * 3, i * 3 + 1, i * 3 + 2].join()) return ROWS[i] + '만';
+        if (s === [i, i + 3, i + 6].join()) return COLS[i] + '만';
+      }
+      return cells.length + '칸 고정';
+    }
+
+    // 연습 설정 패널: 레벨·구종·볼은 칩, 코스는 3×3 칸을 눌러 켜고 끔
+    function drawPracticePanel(o) {
+      hits = []; // 패널 아래 화면은 누를 수 없음
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(-ox, 0, LW, L.height);
+      const px = 60;
+      const py = 90;
+      const pw = L.width - 120;
+      const ph = 560;
+      roundRect(px, py, pw, ph, 18);
+      ctx.fillStyle = 'rgba(16,24,40,0.97)';
+      ctx.fill();
+      ctx.strokeStyle = '#7cc4ff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      text('연습 설정', px + 32, py + 40, 28, '#7cc4ff', 'left', 'bold');
+      text('기록에는 남지 않아요', px + pw - 32, py + 42, 15, '#9ab', 'right');
+
+      // 왼쪽: 칩 줄 (선택된 칩은 파란색)
+      const lx = px + 32;
+      const chipX = lx + 70;
+      const chipH = touch ? 66 : 52; // 터치 기기는 손가락 크기에 맞춰 크게 (줄 간격 80 안에 들어감)
+      const row = (label, y, items) => {
+        text(label, lx, y + chipH / 2, 18, '#bcd', 'left', 'bold');
+        let x = chipX;
+        for (const [id, str, on, w] of items) {
+          button(id, x, y, w, chipH, str, { primary: on, size: 17, noMin: true });
+          x += w + 8;
+        }
+      };
+      row('레벨', py + 80, C.LEVELS.map((lv, i) => ['pset:level:' + i, lv.name + ' ' + lv.baseSpeed + 'km', o.levelIndex === i, 150]));
+      const types = [null].concat(Object.keys(C.PITCH_TYPES));
+      row('구종', py + 160, types.map((t) => ['pset:type:' + (t || 'all'), t || '전 구종', o.type === t, t && t.length > 3 ? 104 : 86]));
+      row('볼', py + 240, [['pset:balls:1', '볼 있음', o.balls, 130], ['pset:balls:0', '볼 없음 (스트라이크만)', !o.balls, 220]]);
+      text('볼 있음이면 고른 코스 근처로만 빠지는 볼이 섞여요', chipX, py + 240 + chipH + 22, 14, '#9ab', 'left');
+
+      // 오른쪽: 코스 3×3
+      const cs = touch ? 88 : 78;
+      const gx = px + pw - 32 - cs * 3;
+      const gy = py + 104;
+      text('코스 (칸을 눌러 켜고 끄기)', gx + (cs * 3) / 2, py + 82, 16, '#bcd', 'center', 'bold');
+      const on = o.cells || [];
+      for (let i = 0; i < 9; i++) {
+        const x = gx + (i % 3) * cs;
+        const y = gy + Math.floor(i / 3) * cs;
+        const sel = on.includes(i);
+        ctx.fillStyle = sel ? 'rgba(47,125,225,0.85)' : on.length ? 'rgba(255,255,255,0.05)' : 'rgba(47,125,225,0.25)';
+        ctx.fillRect(x + 2, y + 2, cs - 4, cs - 4);
+        ctx.strokeStyle = sel ? '#fff' : 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = sel ? 2.5 : 1.5;
+        ctx.strokeRect(x + 2, y + 2, cs - 4, cs - 4);
+        if (sel) text('✓', x + cs / 2, y + cs / 2 + 1, 26, '#fff', 'center', 'bold');
+        hits.push({ id: 'pcell:' + i, x, y, w: cs, h: cs });
+      }
+      text(on.length && on.length < 9 ? practiceCourseLabel(on) : '아무 칸도 안 고르면 전체', gx + (cs * 3) / 2, gy + cs * 3 + 24, 15, '#dde', 'center', 'bold');
+      button('pcell:clear', gx + 30, gy + cs * 3 + 44, cs * 3 - 60, 44, '전체로', { size: 16, noMin: true, disabled: !on.length });
+
+      button('ppanel:close', 640 - 230, py + ph - 76, 210, 56, '닫기', { size: 20, noMin: true });
+      button('practice', 640 + 20, py + ph - 76, 210, 56, '연습 시작 ▶', { primary: true, size: 20, noMin: true });
     }
 
     // 칭호 표시: 왼쪽 가운데(x, cy)부터 테두리 있는 작은 글자. 폭을 돌려줌

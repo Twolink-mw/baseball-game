@@ -48,7 +48,7 @@
   }
 
   // 도전 모드 구성 → { mode, levelIndex, level, rules, modeName, bossId? }
-  // practice opts: { levelIndex, type(구종 이름|null), balls(true면 볼도 던짐), row(0~2|null), col(0~2|null) }
+  // practice opts: { levelIndex, type(구종 이름|null), balls(true면 볼도 던짐), cells(코스 고정 칸 번호 배열) }
   function modeSetup(modeId, opts, config) {
     const C = config || BB.CONFIG;
     const M = C.MODES[modeId];
@@ -60,14 +60,9 @@
       delete level.sequencing; // 연습은 카운트가 없음
       if (opts.type && C.PITCH_TYPES[opts.type]) level.pitchMix = { [opts.type]: 1 };
       if (!opts.balls) level.ballRate = 0;
-      // 코스 고정: row(0 높은 공 ~ 2 낮은 공), col(0 왼쪽 ~ 2 오른쪽). 둘 다 주면 한 칸, 하나만 주면 한 줄
-      const inRange = (v) => v === 0 || v === 1 || v === 2;
-      if (inRange(opts.row) || inRange(opts.col)) {
-        level.cells = [];
-        for (let i = 0; i < 9; i++) {
-          if ((!inRange(opts.row) || Math.floor(i / 3) === opts.row) && (!inRange(opts.col) || i % 3 === opts.col)) level.cells.push(i);
-        }
-      }
+      // 코스 고정: cells = 칸 번호(0~8, 행×3+열). 비었거나 9칸 전부면 고정 없음
+      const cells = Array.isArray(opts.cells) ? Array.from(new Set(opts.cells.filter((i) => Number.isInteger(i) && i >= 0 && i < 9))).sort((a, b) => a - b) : [];
+      if (cells.length && cells.length < 9) level.cells = cells;
       return { mode: modeId, levelIndex, level, rules: { practice: true }, modeName: M.name };
     }
     const levelIndex = M.level - 1;

@@ -11,7 +11,8 @@
   const app = {
     screen: 'title', // title | game | result | players | modes
     lastStart: null, // 다시하기용 { levelIndex, mode, opts }
-    practiceOpts: { levelIndex: 0, type: null, balls: true, row: null, col: null }, // 연습 설정 (저장 안 함). row/col: 코스 고정
+    practiceOpts: { levelIndex: 0, type: null, balls: true, cells: [] }, // 연습 설정 (저장 안 함). cells: 코스 고정 칸(0~8), 비면 전체
+    practicePanel: false, // 도전 모드 화면의 연습 설정 패널
     pauseAnalysis: false, // 연습 일시정지 중 분석 보기
     shownScreen: null, // 화면 전환 페이드: 마지막으로 그린 화면
     fadeStart: 0,
@@ -344,6 +345,7 @@
     audio.setAmbience(false);
     app.game = null;
     app.pauseAnalysis = false;
+    app.practicePanel = false;
     app.screen = 'title';
   }
 
@@ -383,16 +385,25 @@
     if (id.startsWith('level:')) return startGame(Number(id.slice(6)), 'normal');
     if (id.startsWith('mode:')) return startGame(0, id.slice(5));
     if (id.startsWith('boss:')) return startGame(0, 'boss', { bossId: id.slice(5) });
-    if (id.startsWith('popt:')) {
-      // 연습 설정 순환: 레벨 / 구종(전체 → 각 구종) / 볼 켜기·끄기
+    if (id.startsWith('pset:')) {
+      // 연습 설정 칩: pset:level:i / pset:type:이름|all / pset:balls:1|0
       const o = app.practiceOpts;
-      const what = id.slice(5);
-      if (what === 'level') o.levelIndex = (o.levelIndex + 1) % C.LEVELS.length;
-      else if (what === 'type') {
-        const types = [null].concat(Object.keys(C.PITCH_TYPES));
-        o.type = types[(types.indexOf(o.type) + 1) % types.length];
-      } else if (what === 'balls') o.balls = !o.balls;
-      else if (what === 'row' || what === 'col') o[what] = o[what] === null ? 0 : o[what] >= 2 ? null : o[what] + 1; // 전체 → 0 → 1 → 2 → 전체
+      const [, what, v] = id.split(':');
+      if (what === 'level') o.levelIndex = Number(v);
+      else if (what === 'type') o.type = v === 'all' ? null : v;
+      else if (what === 'balls') o.balls = v === '1';
+      return;
+    }
+    if (id.startsWith('pcell:')) {
+      // 코스 칸 켜고 끄기 (pcell:clear = 전체로)
+      const o = app.practiceOpts;
+      const v = id.slice(6);
+      if (v === 'clear') o.cells = [];
+      else {
+        const i = Number(v);
+        o.cells = o.cells.includes(i) ? o.cells.filter((c) => c !== i) : o.cells.concat([i]).sort((a, b) => a - b);
+        if (o.cells.length === 9) o.cells = []; // 9칸 전부 = 전체
+      }
       return;
     }
     if (id.startsWith('player:')) {
@@ -416,7 +427,14 @@
         app.screen = 'modes';
         return;
       case 'practice':
-        return startGame(0, 'practice', Object.assign({}, app.practiceOpts));
+        app.practicePanel = false;
+        return startGame(0, 'practice', Object.assign({}, app.practiceOpts, { cells: app.practiceOpts.cells.slice() }));
+      case 'ppanel:open':
+        app.practicePanel = true;
+        return;
+      case 'ppanel:close':
+        app.practicePanel = false;
+        return;
       case 'pauseAnalysis':
         app.pauseAnalysis = !app.pauseAnalysis;
         return;
@@ -503,7 +521,10 @@
       } else if (app.screen === 'players') {
         goTitle();
       } else if (app.screen === 'modes') {
-        if (code === 'Escape') goTitle();
+        if (code === 'Escape') {
+          if (app.practicePanel) app.practicePanel = false;
+          else goTitle();
+        }
       } else if (app.screen === 'title' && code !== 'Escape') {
         startGame(app.lastLevel, 'normal');
       }
@@ -614,6 +635,8 @@
       if (!app.game.paused) setPaused(true); // 경기 중: 일시정지 메뉴
       else if (app.pauseAnalysis) app.pauseAnalysis = false; // 연습 분석 닫기
       else goTitle(); // 일시정지 중 한 번 더: 타이틀로
+    } else if (app.screen === 'modes' && app.practicePanel) {
+      app.practicePanel = false; // 연습 설정 패널 닫기
     } else if (app.screen !== 'title') goTitle();
     else if (performance.now() >= exitArmedUntil) {
       exitArmedUntil = performance.now() + BACK_EXIT_SEC * 1000;
@@ -718,6 +741,7 @@
       result: app.result,
       resultTab: app.resultTab,
       practiceOpts: app.practiceOpts,
+      practicePanel: app.practicePanel,
       pauseAnalysis: app.pauseAnalysis,
       hover: app.hover,
       today: today(),
