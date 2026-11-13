@@ -682,37 +682,65 @@
     const LOG_X_RIGHT = L.width - 16 - LOG_W;
 
     // 위: 이번 타석(미니 존 + 목록), 아래: 직전 타석(다음 타석이 끝날 때까지 유지)
-    function drawPitchLog(g, x) {
+    // 투구 기록 패널 자리: 타자 반대쪽 (배트를 가리지 않게). 터치 기기는 일시정지 버튼·터치 패드도 피함
+    // → { x, y(위), bottom(아래 한계) }
+    function logPlacement(view, g) {
+      const left = g.bats !== 'R'; // 우타자는 화면 왼쪽에 서므로 기록은 오른쪽, 좌타자는 왼쪽
+      const hudBottom = 16 + hudHeight(g) + 12;
+      if (!touch) return left ? { x: 16, y: hudBottom, bottom: 708 } : { x: LOG_X_RIGHT, y: 150, bottom: 640 };
+      // 터치: 오른쪽 위에는 일시정지 버튼(높이 56), 한쪽 아래에는 터치 패드(HTML, CSS px 크기)
+      const padLeft = view.record && view.record.settings.padSide === 'left';
+      const T = C.TOUCH;
+      const padTop = L.height - (3 * T.padCellPx + 2 * T.padGapPx + T.padMarginPx + 12) / cssScale;
+      const padShown = !g.paused; // 일시정지 중에는 패드가 숨겨지므로 아래까지 씀
+      const spot = (onLeft) => {
+        const y = onLeft ? hudBottom : 72;
+        const underPad = padShown && padLeft === onLeft;
+        return { x: onLeft ? 16 : LOG_X_RIGHT, y, bottom: underPad ? Math.max(y + 60, padTop) : 708 };
+      };
+      const want = spot(left);
+      // 간단히(제목 + 2줄)라도 들어가면 타자 반대쪽. 그것도 안 되면(아주 낮은 화면) 경기 중에는 숨기고
+      // 일시정지 화면에서 크게 보여 줌 — 배트를 가리는 것보다 낫다 (피드백: 투구 기록이 배트를 가림)
+      return want.bottom - want.y >= 100 ? want : null;
+    }
+
+    function drawPitchLog(g, place) {
+      if (!place) return; // 자리가 없음 (아주 낮은 화면의 경기 중)
       // 연습은 타석이 끝나지 않으므로 최근 몇 개만
       const practice = !!(g.rules && g.rules.practice);
-      const cur = practice ? g.history.slice(-C.MODES.practice.logRows) : g.history.filter((h) => h.atBat === g.atBat);
+      let cur = practice ? g.history.slice(-C.MODES.practice.logRows) : g.history.filter((h) => h.atBat === g.atBat);
       const prev = !practice && g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
-      x = x == null ? LOG_X_RIGHT : x;
-      const onLeft = x < L.width / 2; // 왼쪽이면 HUD 아래부터
-      const y = onLeft ? 16 + hudHeight(g) + 12 : 150;
+      const x = place.x;
+      const y = place.y;
       const w = LOG_W;
-      const bottom = onLeft ? 708 : 640; // 오른쪽은 아래 버튼 위까지
-      const cs = 40; // 미니 존 칸 크기
+      const bottom = place.bottom;
+      // 자리가 좁으면 미니 존 없이 목록만(간단히)
+      const compact = bottom - y < 300;
+      const cs = compact ? 0 : 40; // 미니 존 칸 크기
       const zx = x + (w - cs * 3) / 2;
       const zy = y + 62; // 존 위·아래로 볼 자리(반 칸)를 남김
-      const rowY = zy + cs * 3 + 36;
+      const rowY = compact ? y + 38 : zy + cs * 3 + 36;
       const CUR_H = 30;
       const PREV_H = 26;
+      // 이번 타석도 넘치면 마지막 몇 줄만
+      const maxCur = Math.max(1, Math.floor((bottom - 8 - rowY) / CUR_H));
+      if (cur.length > maxCur) cur = cur.slice(cur.length - maxCur);
       // 줄 수가 넘치면 직전 타석은 마지막 몇 줄만
       const curRows = Math.max(1, cur.length);
       let prevRows = prev.length;
       const room = bottom - 8 - (rowY + curRows * CUR_H) - (prev.length ? 36 : 0);
       if (prevRows * PREV_H > room) prevRows = Math.max(0, Math.floor(room / PREV_H));
+      const showPrev = prev.length > 0 && prevRows > 0; // 자리가 없으면 직전 타석은 생략
       const prevTop = rowY + curRows * CUR_H + 6;
-      const h = (prev.length ? prevTop + 32 + prevRows * PREV_H : rowY + curRows * CUR_H) - y + 8;
+      const h = (showPrev ? prevTop + 32 + prevRows * PREV_H : rowY + curRows * CUR_H) - y + 8;
       roundRect(x, y, w, h, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.85)';
       ctx.fill();
       text(practice ? '최근 투구' : g.atBat + '번째 타석', x + 16, y + 22, 18, '#ffd34d', 'left', 'bold');
-      // 미니 존: 공이 들어온 칸에 투구 번호
+      // 미니 존: 공이 들어온 칸에 투구 번호 (간단히 모드에서는 생략)
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= 3; i++) {
+      for (let i = 0; i <= 3 && !compact; i++) {
         ctx.beginPath();
         ctx.moveTo(zx + cs * i, zy);
         ctx.lineTo(zx + cs * i, zy + cs * 3);
@@ -724,7 +752,7 @@
       const last = cur[cur.length - 1];
       // 이번 타석 볼/스트라이크 카운트
       if (!practice) text('B ' + g.balls + '  S ' + g.strikes, x + w - 16, y + 22, 18, '#dfe6ee', 'right', 'bold');
-      if (last && last.clickCell) {
+      if (!compact && last && last.clickCell) {
         // 직전 투구에서 휘두른 칸
         const p = center(last.clickCell);
         ctx.strokeStyle = '#ffd34d';
@@ -733,7 +761,7 @@
       }
       const perCell = {};
       const OFFS = [[0, 0], [-10, -10], [10, 10], [10, -10], [-10, 10]];
-      cur.forEach((e) => {
+      (compact ? [] : cur).forEach((e) => {
         const k = e.cell.row * 3 + e.cell.col;
         const o = OFFS[(perCell[k] = (perCell[k] || 0) + 1) - 1] || [0, 0];
         const p = center(e.cell);
@@ -746,7 +774,7 @@
       if (!cur.length) text('첫 공을 기다리는 중', x + w / 2, rowY + 15, 17, '#789', 'center');
       cur.forEach((e, i) => logRow(e, x, w, rowY + i * CUR_H + 15, 18, false));
       // 직전 타석
-      if (prev.length) {
+      if (showPrev) {
         ctx.strokeStyle = 'rgba(255,255,255,0.18)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -880,10 +908,9 @@
       drawHitFx(g);
       ctx.restore();
       drawHud(g, view);
-      // 터치 기기: 투구 기록은 패드 반대쪽(HUD 아래 또는 오른쪽), 버튼은 오른쪽 위 일시정지 하나
+      // 투구 기록은 타자 반대쪽(배트를 가리지 않게). 터치 기기 버튼은 오른쪽 위 일시정지 하나
       const padLeft = view.record && view.record.settings.padSide === 'left';
-      const logX = touch && !padLeft ? 16 : LOG_X_RIGHT;
-      drawPitchLog(g, logX);
+      drawPitchLog(g, logPlacement(view, g));
       drawBubble(g);
       drawStatusPill(g);
       drawCenterMessage(g);
@@ -909,7 +936,7 @@
         }
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(-ox, 0, LW, L.height);
-        drawPitchLog(g, logX); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
+        drawPitchLog(g, logPlacement(view, g)); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
         text('일시정지', 640, 220, 56, '#fff', 'center', 'bold');
         button('resume', 640 - 210, 290, 200, 60, '계속하기', { primary: true });
         button('menu', 640 + 10, 290, 200, 60, '메뉴로');
