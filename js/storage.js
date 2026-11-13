@@ -34,7 +34,20 @@
       streak: 0, streakBest: 0, dailyLog: [], // 챌린지 연속 참여 일수(마지막 공식 판 기준), 최고 연속, 최근 공식 판 기록
       modes: { survival: null, derby: null }, // 도전 모드 최고 점수(서바이벌 안타 수, 홈런 더비 홈런 수)
       boss: {}, // 보스 투수별 최고 타율 { id: avg }
+      uniform: { color: 0, number: null }, // 유니폼 색(BATTER.colors 번호), 등번호(0~numberMax, 없으면 null)
     };
+  }
+
+  // 유니폼 값 정리: 모르는 색은 0(기본), 등번호는 0~numberMax 정수만
+  const isUniformColor = (c) => Number.isInteger(c) && c >= 0 && c < CONFIG.BATTER.colors.length;
+  const isUniformNumber = (n) => n === null || (Number.isInteger(n) && n >= 0 && n <= CONFIG.BATTER.numberMax);
+  function normalizeUniform(u) {
+    const out = { color: 0, number: null };
+    if (u && typeof u === 'object') {
+      if (isUniformColor(u.color)) out.color = u.color;
+      if (isUniformNumber(u.number)) out.number = u.number;
+    }
+    return out;
   }
 
   const SCORE_MODES = ['survival', 'derby'];
@@ -118,6 +131,7 @@
     }
     if (isCount(obj.missions)) p.missions = obj.missions; // 챌린지 미션 누적 달성 횟수
     p.titles = normalizeTitles(obj.titles); // 칭호 (모르는 id는 버림)
+    p.uniform = normalizeUniform(obj.uniform);
     if (isCount(obj.streak)) p.streak = obj.streak;
     p.streakBest = Math.max(p.streak, isCount(obj.streakBest) ? obj.streakBest : 0);
     p.dailyLog = normalizeLog(obj.dailyLog);
@@ -189,6 +203,7 @@
       (p.daily === undefined || isDaily(p.daily)) &&
       (p.missions === undefined || isCount(p.missions)) &&
       (p.titles === undefined || (Array.isArray(p.titles) && p.titles.every((t) => typeof t === 'string'))) &&
+      (p.uniform === undefined || (!!p.uniform && typeof p.uniform === 'object' && isUniformColor(p.uniform.color) && isUniformNumber(p.uniform.number))) &&
       (p.streak === undefined || isCount(p.streak)) &&
       (p.streakBest === undefined || isCount(p.streakBest)) &&
       (p.dailyLog === undefined || (Array.isArray(p.dailyLog) && p.dailyLog.every(isLogEntry))) &&
@@ -216,7 +231,8 @@
   // ---- 타자 ----
   // 이름으로 타자를 찾거나 만든 뒤 현재 타자로 지정. { record, key, created } 또는 { error: 'invalid'|'full' }
   // bats('R'|'L')를 주면 그 타자의 타석 방향도 바꾼다. 생략하면 새 타자는 우타, 기존 타자는 그대로
-  function ensurePlayer(record, name, bats) {
+  // uniform({color, number})을 주면 유니폼도 바꾼다 (잘못된 값은 기본값). 생략하면 그대로
+  function ensurePlayer(record, name, bats, uniform) {
     const n = normalizeName(name);
     if (n === null) return { error: 'invalid' };
     const r = normalizeRecord(record);
@@ -228,6 +244,7 @@
       created = true;
     }
     if (isBats(bats)) r.players[key].bats = bats;
+    if (uniform) r.players[key].uniform = normalizeUniform(uniform);
     r.current = key;
     return { record: r, key, created };
   }
@@ -317,7 +334,7 @@
 
   // ---- 가져오기 병합 ----
   // 타자별: 최고 타율 큰 값, 해제 OR, 통산/게임 수는 타수가 많은 쪽(합치면 중복 집계), daily는 늦은 날짜.
-  // 한쪽에만 있는 타자는 추가. 현재 타자/설정/타석 방향은 base(현재 기기) 유지
+  // 한쪽에만 있는 타자는 추가. 현재 타자/설정/타석 방향/유니폼은 base(현재 기기) 유지
   function mergeRecords(base, incoming) {
     const r = normalizeRecord(base);
     const b = normalizeRecord(incoming);

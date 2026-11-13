@@ -165,6 +165,12 @@ body {
     margin: 0;
   }
 
+  #name-form .uniform {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0;
+  }
+
   #name-form .dialog-error {
     order: 3;
     flex-basis: 100%;
@@ -314,6 +320,77 @@ body {
 .bats input:focus-visible + span {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+/* 유니폼 색(동그란 견본) + 등번호 */
+.uniform {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 10px 0 2px;
+}
+
+.uniform-label {
+  font-size: 15px;
+  color: #bcd;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.swatches input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.swatches span {
+  display: block;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  box-sizing: border-box;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.swatches input:checked + span {
+  border-color: #ffd34d;
+  box-shadow: 0 0 0 2px #13213a, 0 0 0 4px #ffd34d;
+}
+
+.swatches input:focus-visible + span {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.uniform-number {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: #bcd;
+}
+
+#number-input {
+  width: 64px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  font-size: 18px; /* iOS 자동 확대 방지 */
+  text-align: center;
+  border-radius: 8px;
+  border: 2px solid #4a6a9a;
+  background: #0b1526;
+  color: #fff;
+}
+
+#number-input:focus {
+  outline: none;
+  border-color: #ffd34d;
 }
 
 .chips {

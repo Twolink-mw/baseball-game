@@ -274,6 +274,7 @@
       targets: opts.targets || null, // 승부처 목표 (clutchTargets)
       playerName: opts.playerName || '', // 표시용
       bats: opts.bats === 'L' ? 'L' : 'R', // 표시용: 우타(R) / 좌타(L)
+      uniform: opts.uniform || null, // 표시용: { color(BATTER.colors 번호), number }
       phase: 'AT_BAT_INTRO',
       time: 0,
       phaseStart: 0,

@@ -73,8 +73,29 @@
     list: document.getElementById('name-list'),
     cancel: document.getElementById('name-cancel'),
     bats: Array.from(document.querySelectorAll('#name-form input[name="bats"]')),
+    number: document.getElementById('number-input'),
+    swatches: [],
     pending: null, // 확인 후 실행할 동작
   };
+
+  // 유니폼 색 견본 (config.BATTER.colors)
+  {
+    const box = document.getElementById('uniform-colors');
+    C.BATTER.colors.forEach((c, i) => {
+      const label = document.createElement('label');
+      label.title = c.label;
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'uniform';
+      input.value = String(i);
+      input.setAttribute('aria-label', c.label);
+      const span = document.createElement('span');
+      span.style.background = c.hex;
+      label.append(input, span);
+      box.appendChild(label);
+      dialog.swatches.push(input);
+    });
+  }
 
   function getBats() {
     const r = dialog.bats.find((b) => b.checked);
@@ -85,11 +106,25 @@
     for (const b of dialog.bats) b.checked = b.value === v;
   }
 
+  // 유니폼: 고른 색, 등번호(숫자가 아니거나 비면 없음)
+  function getUniform() {
+    const r = dialog.swatches.find((b) => b.checked);
+    const digits = dialog.number.value.replace(/\D/g, '');
+    return { color: r ? Number(r.value) : 0, number: digits === '' ? null : Math.min(C.BATTER.numberMax, Number(digits)) };
+  }
+
+  function setUniform(u) {
+    const color = u ? u.color : 0;
+    for (const b of dialog.swatches) b.checked = Number(b.value) === color;
+    dialog.number.value = u && u.number !== null && u.number !== undefined ? String(u.number) : '';
+  }
+
   function openNameDialog(pending) {
     dialog.pending = pending || null;
     const p = currentPlayer();
     dialog.input.value = p ? p.name : '';
     setBats(p ? p.bats : 'R');
+    setUniform(p ? p.uniform : null);
     dialog.error.textContent = '';
     dialog.list.textContent = '';
     for (const q of BB.rankPlayers(app.record)) {
@@ -114,9 +149,9 @@
     dialog.input.blur();
   }
 
-  // bats를 생략하면(기존 타자 버튼) 그 타자의 저장된 타석 방향을 그대로 쓴다
-  function confirmName(name, bats) {
-    const res = BB.ensurePlayer(app.record, name, bats);
+  // bats·uniform을 생략하면(기존 타자 버튼) 그 타자의 저장된 타석 방향·유니폼을 그대로 쓴다
+  function confirmName(name, bats, uniform) {
+    const res = BB.ensurePlayer(app.record, name, bats, uniform);
     if (res.error === 'invalid') {
       dialog.error.textContent = '이름을 1~' + C.NAME_MAX + '자로 입력하세요.';
       return;
@@ -133,13 +168,21 @@
 
   dialog.form.addEventListener('submit', (e) => {
     e.preventDefault();
-    confirmName(dialog.input.value, getBats());
+    confirmName(dialog.input.value, getBats(), getUniform());
   });
-  // 기존 타자 이름을 입력하면 그 타자의 우타/좌타를 미리 선택
+  // 기존 타자 이름을 입력하면 그 타자의 우타/좌타·유니폼을 미리 선택
   dialog.input.addEventListener('input', () => {
     const key = BB.playerKey(dialog.input.value);
     const q = key && app.record.players[key];
-    if (q) setBats(q.bats);
+    if (q) {
+      setBats(q.bats);
+      setUniform(q.uniform);
+    }
+  });
+  // 등번호 칸은 숫자만
+  dialog.number.addEventListener('input', () => {
+    const v = dialog.number.value.replace(/\D/g, '').slice(0, 2);
+    if (v !== dialog.number.value) dialog.number.value = v;
   });
   dialog.cancel.addEventListener('click', closeNameDialog);
   dialog.el.addEventListener('keydown', (e) => {
@@ -305,7 +348,7 @@
     }
     app.game = BB.createGame({
       levelIndex: setup.levelIndex, level: setup.level, mission: setup.mission, mode,
-      pitchSeed: setup.pitchSeed, judgeSeed: setup.judgeSeed, playerName: p.name, bats: p.bats,
+      pitchSeed: setup.pitchSeed, judgeSeed: setup.judgeSeed, playerName: p.name, bats: p.bats, uniform: p.uniform,
       targets: mode === 'normal' ? BB.clutchTargets(p, levelIndex) : null, // 승부처 목표 (해제·최고 타율)
       rules: setup.rules, modeName: setup.modeName, bossId: setup.bossId,
     });

@@ -75,6 +75,11 @@
           <label><input type="radio" name="bats" value="L" /><span>좌타</span></label>
         </div>
         <input id="name-input" type="text" maxlength="8" placeholder="이름 (1~8자)" enterkeyhint="done" spellcheck="false" />
+        <div class="uniform">
+          <span class="uniform-label">유니폼</span>
+          <div id="uniform-colors" class="swatches" role="radiogroup" aria-label="유니폼 색"></div>
+          <label class="uniform-number">등번호 <input id="number-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" placeholder="없음" enterkeyhint="done" /></label>
+        </div>
         <p id="name-error" class="dialog-error" aria-live="polite"></p>
         <div id="name-list" class="chips"></div>
         <div class="dialog-actions">

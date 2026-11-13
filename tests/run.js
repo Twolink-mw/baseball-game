@@ -1072,6 +1072,26 @@ test('3루타: 안타로 집계, 장타 미션에 포함, 2루타 몫에서 떼�
   assert.ok(CONFIG.JUDGE.exact.PERFECT.TRIPLE > 0 && CONFIG.JUDGE.exact.PERFECT.TRIPLE < CONFIG.JUDGE.exact.PERFECT.DOUBLE);
 });
 
+section('타자 유니폼');
+test('유니폼: 새 타자는 기본, 지정하면 저장, 생략하면 유지, 잘못된 값은 정리, 검증·병합(현재 기기 유지)', () => {
+  let r = S.ensurePlayer(S.defaultRecord(), '가').record;
+  assert.deepEqual(r.players['가'].uniform, { color: 0, number: null });
+  r = S.ensurePlayer(r, '가', 'L', { color: 3, number: 7 }).record;
+  assert.deepEqual(r.players['가'].uniform, { color: 3, number: 7 });
+  r = S.ensurePlayer(r, '가').record; // 기존 타자 버튼: 그대로
+  assert.deepEqual(r.players['가'].uniform, { color: 3, number: 7 });
+  r = S.ensurePlayer(r, '가', 'L', { color: 99, number: 150 }).record;
+  assert.deepEqual(r.players['가'].uniform, { color: 0, number: null });
+  r = S.ensurePlayer(r, '가', 'L', { color: CONFIG.BATTER.colors.length - 1, number: 0 }).record;
+  assert.deepEqual(r.players['가'].uniform, { color: CONFIG.BATTER.colors.length - 1, number: 0 }); // 0번도 등번호
+  assert.deepEqual(S.normalizeRecord({ v: 2, players: { x: { name: 'x' } } }).players.x.uniform, { color: 0, number: null }); // 이전 저장본
+  const bad = JSON.parse(S.exportRecord(r));
+  bad.players['가'].uniform = { color: 1, number: 'x' };
+  assert.equal(S.validateRecord(bad), null);
+  const other = S.ensurePlayer(S.defaultRecord(), '가', 'L', { color: 2, number: 51 }).record;
+  assert.deepEqual(S.mergeRecords(r, other).players['가'].uniform, r.players['가'].uniform);
+});
+
 section('투수 외형');
 test('레벨·보스 투수마다 외형이 있고 형식이 맞음, 챌린지·보스는 투수 외형을 덮어씀', () => {
   const { modeSetup, challengeSetup } = require('../js/game.js');

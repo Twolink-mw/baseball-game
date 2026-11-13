@@ -331,7 +331,12 @@
         const m = (g.phaseElapsed() - g.pitch.holdSec) / g.pitch.motionSec;
         if (m > 0.35 && m < 1) stride = Math.sin(Math.PI * ((m - 0.35) / 0.65));
       }
-      const opts = { target, idleT: g.paused ? 0 : now, stride, react: batterReact(g), runDir: mirror ? -1 : 1 };
+      const u = g.uniform || {};
+      const colors = C.BATTER.colors;
+      const opts = {
+        target, idleT: g.paused ? 0 : now, stride, react: batterReact(g), runDir: mirror ? -1 : 1,
+        jersey: (colors[u.color] || colors[0]).hex, name: g.playerName, number: u.number, mirrored: mirror,
+      };
       if (mirror) {
         ctx.save();
         ctx.translate(L.width, 0);

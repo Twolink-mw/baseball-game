@@ -499,11 +499,22 @@
     return { dx: clamp(target.x - px, 180), dy: clamp(target.y - py, 160) };
   }
 
+  // '#rrggbb'를 흰색(k>0) 또는 검은색(k<0) 쪽으로 섞음
+  function shade(hex, k) {
+    const n = parseInt(hex.slice(1), 16);
+    const t = k > 0 ? 255 : 0;
+    const a = Math.abs(k);
+    const ch = (v) => Math.round(v + (t - v) * a);
+    return 'rgb(' + ch((n >> 16) & 255) + ',' + ch((n >> 8) & 255) + ',' + ch(n & 255) + ')';
+  }
+
   // swing: 0(준비) → 1(팔로스루). null이면 준비 자세
   // o: { target(누른 칸 중심, 좌타 그림 좌표), idleT(초, 대기 중 배트 까딱임), stride(0~1, 앞발 들기),
-  //      react: { kind: 'admire'|'drop'|'slump', t(초) } 결과 반응, runDir(1루 쪽 x 방향: 1 또는 -1) }
+  //      react: { kind: 'admire'|'drop'|'slump', t(초) } 결과 반응, runDir(1루 쪽 x 방향: 1 또는 -1),
+  //      jersey(유니폼 색 '#rrggbb'), name·number(등 이름·번호), mirrored(우타자: 글자를 다시 뒤집어 바로 보이게) }
   function drawBatter(c, swing, o) {
     o = o || {};
+    const jersey = o.jersey || '#24345a';
     const B = L.batter;
     const s = swing === null ? 0 : swing;
     const bs = Math.min(1, s / 0.45); // 몸통 회전 진행도
@@ -550,10 +561,10 @@
     // 결과 반응: 삼진이면 어깨가 처지고, 홈런이면 공을 올려다봄
     const slump = react && react.kind === 'slump' ? rk(0.25, 0.5) : 0;
     const admire = react && react.kind === 'admire' ? rk(0.45, 0.8) : 0;
-    // 몸통: 남색 유니폼, 스윙 때 왼쪽으로 회전
+    // 몸통: 유니폼 색, 스윙 때 왼쪽으로 회전
     const sh = { x: bx - 2 - 34 * bs, y: by - 262 + 6 * bs + lean * 1.4 + 10 * slump - 6 * st };
     const torsoW = 74 - 18 * Math.sin(bs * Math.PI);
-    c.fillStyle = '#24345a';
+    c.fillStyle = jersey;
     c.beginPath();
     c.moveTo(hip.x - 30, hip.y + 12);
     c.lineTo(hip.x + 30, hip.y + 12);
@@ -563,6 +574,33 @@
     c.fill();
     c.fillStyle = 'rgba(255,255,255,0.08)';
     c.fillRect(hip.x - 30, hip.y - 4, 60, 10); // 벨트 부분
+    // 등 이름·번호: 몸통이 돌면 가로로 좁아짐. 우타자는 그림이 뒤집혀 있으므로 글자만 다시 뒤집음
+    if (o.name || (o.number !== null && o.number !== undefined)) {
+      const nx = sh.x * 0.55 + hip.x * 0.45;
+      // 팔에 가리지 않게 등 아래쪽: 이름(위) + 번호(아래). 번호가 없으면 이름만 가운데
+      const hasNo = o.number !== null && o.number !== undefined;
+      c.save();
+      c.translate(nx, sh.y + 58);
+      if (o.mirrored) c.scale(-1, 1);
+      c.scale(torsoW / 74, 1);
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      if (o.name) {
+        c.font = 'bold 15px ' + FONT;
+        c.fillStyle = 'rgba(255,255,255,0.92)';
+        c.fillText(o.name, 0, hasNo ? 0 : 18, 64);
+      }
+      if (hasNo) {
+        c.font = 'bold 40px ' + FONT;
+        c.lineJoin = 'round';
+        c.lineWidth = 5;
+        c.strokeStyle = shade(jersey, -0.45);
+        c.strokeText(String(o.number), 0, 32);
+        c.fillStyle = '#fff';
+        c.fillText(String(o.number), 0, 32);
+      }
+      c.restore();
+    }
     // 손 위치와 배트 각도 (키프레임 보간, 누른 칸 쪽으로 보정)
     let { hand, ang, len } = batPose(bx, by, s, aim);
     if (swing === null && !react) {
@@ -588,7 +626,7 @@
       }
     }
     // 뒷팔 → 배트 → 앞팔 순서로 겹치게
-    c.strokeStyle = '#24345a';
+    c.strokeStyle = jersey;
     c.lineWidth = 20;
     c.beginPath();
     c.moveTo(sh.x + torsoW / 2 - 8, sh.y + 14);
@@ -613,8 +651,8 @@
     c.fillStyle = '#c99a72'; // 목
     c.fillRect(hx - 10, hy + 14, 20, 20);
     const hg = c.createRadialGradient(hx - 8, hy - 10, 4, hx, hy, 34);
-    hg.addColorStop(0, '#3d5791');
-    hg.addColorStop(1, '#16213d');
+    hg.addColorStop(0, shade(jersey, 0.22)); // 헬멧은 유니폼 색 계열
+    hg.addColorStop(1, shade(jersey, -0.4));
     c.fillStyle = hg;
     c.beginPath();
     c.arc(hx, hy, 30, 0, Math.PI * 2);
