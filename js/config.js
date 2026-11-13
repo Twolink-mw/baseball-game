@@ -60,7 +60,7 @@
     // 직구 기준 구속은 메이저리그 기준: 기교파 선발(90mph) / 리그 평균(94.5mph) / 정상급 마무리(99.5mph)
     LEVELS: [
       {
-        id: 1, name: 'Lv.1', title: '기교파', baseSpeed: 145, revealSec: 0.6,
+        id: 1, name: 'Lv.1', title: '기교파', baseSpeed: 145, revealSec: 0.6, mood: 'day', // 구장 분위기 (THEME.moods)
         // 투구 템포(초): 세트 자세 멈춤 + 투구 동작. 둘 다 범위 안에서 투구마다 랜덤
         tempo: { hold: [0.1, 0.4], motion: [0.9, 0.9] }, // 거의 일정한 리듬
         pitchMix: { '직구': 55, '투심': 25, '체인지업': 20 },
@@ -69,7 +69,7 @@
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.40, // M3 튜닝 0.42 → 0.38, 플레이 피드백(Lv.3보다 어렵게 느껴짐) 0.38 → 0.40
+        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.40, mood: 'dusk', // M3 튜닝 0.42 → 0.38, 플레이 피드백(Lv.3보다 어렵게 느껴짐) 0.38 → 0.40
         tempo: { hold: [0, 0.8], motion: [0.7, 0.9] }, // 가끔 길게 멈춤
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
@@ -80,7 +80,7 @@
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
-        id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
+        id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, mood: 'night', // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
         tempo: { hold: [0, 1.2], motion: [0.55, 0.9] }, // 퀵 모션과 긴 멈춤이 섞임
         pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
@@ -159,6 +159,18 @@
       praisePerfects: 3, // 지적할 것이 없고 정확 타이밍이 이 이상이면 칭찬
       maxTips: 2, // 한 줄 평 최대 개수
       stripRange: 0.2, // 타이밍 띠의 좌우 범위(초)
+    },
+
+    // 구장 분위기: 경기 화면에서 레벨(LEVELS[].mood)에 따라. 메뉴 화면은 day
+    // sky: 하늘 그라데이션(위·70%·지평선), cloud: 구름 색, tint: 위쪽(관중석·하늘) 덮개 색(아래로 갈수록 투명, 그라운드는 조명 받은 듯 밝게 유지),
+    // glow: 조명탑 빛 세기(0~1), stars: 별
+    THEME: {
+      moods: {
+        day: { sky: ['#2d5f9e', '#8fc0e6', '#d2e8f6'], cloud: 'rgba(255,255,255,0.85)', tint: null, glow: 0, stars: false },
+        dusk: { sky: ['#3a2d66', '#d4705a', '#ffc58a'], cloud: 'rgba(255,205,180,0.7)', tint: 'rgba(90,40,30,0.22)', glow: 0.45, stars: false },
+        night: { sky: ['#03060f', '#0d1830', '#1f2f52'], cloud: 'rgba(110,125,160,0.18)', tint: 'rgba(4,8,22,0.5)', glow: 1, stars: true },
+      },
+      starCount: 70,
     },
 
     // 화면 배치(논리 좌표)

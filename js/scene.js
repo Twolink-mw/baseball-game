@@ -97,7 +97,7 @@
 
     // 조명탑
     // 넓은 화면이면 양옆 조명탑도 보임
-    for (const tx of [-330, 96, 420, 1184, 1610]) if (tx > X0 - 80 && tx < X1 + 80) drawLightTower(c, tx, topAt(tx));
+    for (const tx of LIGHT_TOWERS) if (tx > X0 - 80 && tx < X1 + 80) drawLightTower(c, tx, topAt(tx));
 
     // 전광판(틀). 글자는 매 프레임 drawScoreboard에서 그림
     const sb = SCOREBOARD;
@@ -231,6 +231,7 @@
 
   const FONT = 'system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
   const SCOREBOARD = { x: 820, y: 58, w: 250, h: 74 };
+  const LIGHT_TOWERS = [-330, 96, 420, 1184, 1610]; // 조명탑 x (넓은 화면이면 양옆 것도 보임)
 
   // 배경 캐시: 실제 픽셀 크기(w,h)로 한 번 그려 두고 매 프레임 drawImage
   // w,h: 실제 픽셀 크기. 캐시는 X0~X1 전체 폭을 담는다
@@ -246,16 +247,41 @@
   }
 
   // ---- 매 프레임 ----
-  function drawSky(c, nowSec) {
+  // 별: 장식용 고정 RNG로 한 번만 만든다 (게임 RNG와 무관). x는 0~1 비율(넓은 화면에도 퍼지게)
+  let STARS = null;
+  function stars() {
+    if (!STARS) {
+      const r = BB.createRng(4242);
+      STARS = [];
+      for (let i = 0; i < C.THEME.starCount; i++) STARS.push({ u: r.next(), y: 6 + r.next() * 110, s: 0.6 + r.next() * 1.2, p: r.next() * 6.28 });
+    }
+    return STARS;
+  }
+
+  // mood: THEME.moods의 이름 (없으면 day)
+  function moodOf(name) {
+    return C.THEME.moods[name] || C.THEME.moods.day;
+  }
+
+  function drawSky(c, nowSec, moodName) {
+    const m = moodOf(moodName);
     const sky = c.createLinearGradient(0, 0, 0, fenceY());
-    sky.addColorStop(0, '#2d5f9e');
-    sky.addColorStop(0.7, '#8fc0e6');
-    sky.addColorStop(1, '#d2e8f6');
+    sky.addColorStop(0, m.sky[0]);
+    sky.addColorStop(0.7, m.sky[1]);
+    sky.addColorStop(1, m.sky[2]);
     c.fillStyle = sky;
     c.fillRect(X0, 0, X1 - X0, fenceY());
+    if (m.stars) {
+      for (const st of stars()) {
+        c.globalAlpha = 0.45 + 0.4 * Math.sin(nowSec * 1.3 + st.p);
+        c.fillStyle = '#fff';
+        c.fillRect(X0 + st.u * (X1 - X0), st.y, st.s, st.s);
+      }
+      c.globalAlpha = 1;
+    }
     // 구름: 정해진 모양이 천천히 흘러간다
     const clouds = [[80, 52, 1], [460, 30, 0.8], [760, 70, 1.2], [1100, 40, 0.9]];
-    c.fillStyle = 'rgba(255,255,255,0.85)';
+    c.fillStyle = m.cloud;
     const span = X1 - X0 + 300;
     for (const [x0, y, s] of clouds) {
       const x = ((((x0 - X0 + nowSec * C.FX.cloudSpeed * s) % span) + span) % span) - 150 + X0;
@@ -265,6 +291,36 @@
       c.ellipse(x + 30 * s, y + 3 * s, 30 * s, 11 * s, 0, 0, Math.PI * 2);
       c.ellipse(x + 4 * s, y - 9 * s, 24 * s, 12 * s, 0, 0, Math.PI * 2);
       c.fill();
+    }
+  }
+
+  // 배경(캐시) 위에 분위기 덮개 + 조명 빛. 위쪽(하늘·관중석)만 어둡게 하고 그라운드는 조명 받은 듯 그대로
+  function drawMood(c, moodName) {
+    const m = moodOf(moodName);
+    const fy = fenceY();
+    if (m.tint) {
+      const g = c.createLinearGradient(0, 0, 0, fy + 70);
+      g.addColorStop(0, m.tint);
+      g.addColorStop(0.75, m.tint);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g;
+      c.fillRect(X0, 0, X1 - X0, fy + 70);
+    }
+    if (m.glow > 0) {
+      // 조명탑 머리(캐시 배경과 같은 자리)에서 퍼지는 빛
+      const prev = c.globalCompositeOperation;
+      c.globalCompositeOperation = 'lighter';
+      for (const tx of LIGHT_TOWERS) {
+        if (tx < X0 - 160 || tx > X1 + 160) continue;
+        const r = 150;
+        const g = c.createRadialGradient(tx, 33, 6, tx, 33, r);
+        g.addColorStop(0, 'rgba(255,244,210,' + (0.55 * m.glow).toFixed(3) + ')');
+        g.addColorStop(0.35, 'rgba(255,236,190,' + (0.18 * m.glow).toFixed(3) + ')');
+        g.addColorStop(1, 'rgba(255,236,190,0)');
+        c.fillStyle = g;
+        c.fillRect(tx - r, 33 - r, r * 2, r * 2);
+      }
+      c.globalCompositeOperation = prev;
     }
   }
 
@@ -524,6 +580,6 @@
   }
 
   Object.assign(BB, {
-    scene: { project, setExtent, buildBackground, drawSky, drawScoreboard, pitcherPose, drawPitcher, drawBatter, fenceY, SCOREBOARD },
+    scene: { project, setExtent, buildBackground, drawSky, drawMood, drawScoreboard, pitcherPose, drawPitcher, drawBatter, fenceY, SCOREBOARD },
   });
 })(window);

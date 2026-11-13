@@ -394,6 +394,7 @@
           mode: g.mode,
           modeName: g.modeName,
           bossId: g.bossId,
+          mood: g.level.mood || 'day', // 구장 분위기 (공유 카드 배경)
           rules,
           score: g.score(),
           modeOuts: g.modeOuts(),

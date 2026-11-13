@@ -3,7 +3,7 @@
 //   버전이 같으면 설치된 앱이 예전 파일을 계속 씀. 새 파일은 아래 ASSETS 목록에도 추가.
 'use strict';
 
-const CACHE = 'bbgame-v19';
+const CACHE = 'bbgame-v20';
 const ASSETS = [
   './',
   './index.html',

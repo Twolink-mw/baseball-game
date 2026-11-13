@@ -275,9 +275,11 @@
     }
 
     // 구장 배경(하늘+캐시) + 덮개
-    function drawBackdrop(now, shade) {
-      S.drawSky(ctx, now);
+    // mood: 구장 분위기(THEME.moods 이름). 없으면 낮
+    function drawBackdrop(now, shade, mood) {
+      S.drawSky(ctx, now, mood);
       if (bg) ctx.drawImage(bg, -ox, 0, LW, L.height);
+      if (mood && mood !== 'day') S.drawMood(ctx, mood);
       if (shade) {
         ctx.fillStyle = shade;
         ctx.fillRect(-ox, 0, LW, L.height);
@@ -832,7 +834,7 @@
       const sh = g.paused ? 0 : shakeOffset(g);
       ctx.save();
       ctx.translate(0, sh);
-      drawBackdrop(now);
+      drawBackdrop(now, null, g.level.mood);
       drawBoard(g, now);
       drawPitcher(g);
       drawBatter(g);
@@ -1422,7 +1424,7 @@
       ctx = cv.getContext('2d');
       try {
         const s = r.summary;
-        drawBackdrop(now, 'rgba(8,14,26,0.74)');
+        drawBackdrop(now, 'rgba(8,14,26,0.6)', s.mood);
         text('타자 시점 야구', 48, 50, 26, '#cfe', 'left', 'bold');
         text(r.date.replace(/-/g, '.'), L.width - 48, 50, 24, '#cfe', 'right');
         const bats = r.player && r.player.bats === 'L' ? '좌타' : '우타';
