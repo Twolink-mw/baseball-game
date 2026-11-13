@@ -9,7 +9,10 @@
   const audio = BB.createAudio();
 
   const app = {
-    screen: 'title', // title | game | result | players
+    screen: 'title', // title | game | result | players | modes
+    lastStart: null, // 다시하기용 { levelIndex, mode, opts }
+    practiceOpts: { levelIndex: 0, type: null, balls: true }, // 연습 설정 (저장 안 함)
+    pauseAnalysis: false, // 연습 일시정지 중 분석 보기
     record: BB.storage.load(),
     game: null,
     result: null,
@@ -241,8 +244,11 @@
     if (!r) return;
     const card = renderer.makeShareCard(r, performance.now() / 1000);
     const s = r.summary;
-    const title = s.mode === 'challenge' ? r.date.slice(5).replace('-', '/') + ' 챌린지(' + s.pitcherName + ')' : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title;
-    let msg = '타자 시점 야구 · ' + r.playerName + ' · ' + title + ' ' + BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
+    const title = s.mode === 'challenge' ? r.date.slice(5).replace('-', '/') + ' 챌린지(' + s.pitcherName + ')' : s.modeName || C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title;
+    let msg = '타자 시점 야구 · ' + r.playerName + ' · ' + title + ' ';
+    if (s.mode === 'survival') msg += '안타 ' + s.score + '개 (' + s.atBats + '타석)';
+    else if (s.mode === 'derby') msg += '홈런 ' + s.score + '개 (' + s.atBats + '타석)';
+    else msg += BB.formatAvg(s.avg) + ' (' + s.hits + '/' + C.AT_BATS_PER_GAME + ')';
     if (s.mode === 'challenge') {
       // 타석별 결과 격자: 같은 날 같은 공을 상대했으니 타석끼리 비교할 수 있다
       const EMOJI = { HOMERUN: '🟥', DOUBLE: '🟧', SINGLE: '🟨', OUT_BIP: '⬜', STRIKEOUT: '⬛' };
@@ -276,22 +282,30 @@
   }
 
   // ---- 게임 ----
-  function startGame(levelIndex, mode) {
+  // mode: normal | challenge | survival | derby | boss | practice. opts: 보스 { bossId }, 연습 { levelIndex, type, balls }
+  function startGame(levelIndex, mode, opts) {
     const p = currentPlayer();
-    if (!p) return openNameDialog(() => startGame(levelIndex, mode));
+    if (!p) return openNameDialog(() => startGame(levelIndex, mode, opts));
+    const now = Date.now();
+    const seeds = { pitchSeed: BB.hashString('p' + now), judgeSeed: BB.hashString('j' + now) };
     let setup;
     if (mode === 'challenge') {
       setup = BB.challengeSetup(today()); // 오늘의 투수·미션·시드
+    } else if (C.MODES[mode]) {
+      if (mode === 'boss' && !p.unlocked[C.MODES.boss.level - 1]) return; // 보스는 바탕 레벨 해제 후
+      setup = Object.assign(BB.modeSetup(mode, opts), seeds);
     } else {
       if (!p.unlocked[levelIndex]) return; // 이 타자는 아직 잠긴 레벨
-      const now = Date.now();
-      setup = { levelIndex, pitchSeed: BB.hashString('p' + now), judgeSeed: BB.hashString('j' + now) };
+      setup = Object.assign({ levelIndex }, seeds);
     }
     app.game = BB.createGame({
       levelIndex: setup.levelIndex, level: setup.level, mission: setup.mission, mode,
       pitchSeed: setup.pitchSeed, judgeSeed: setup.judgeSeed, playerName: p.name, bats: p.bats,
       targets: mode === 'normal' ? BB.clutchTargets(p, levelIndex) : null, // 승부처 목표 (해제·최고 타율)
+      rules: setup.rules, modeName: setup.modeName, bossId: setup.bossId,
     });
+    app.lastStart = { levelIndex, mode, opts };
+    app.pauseAnalysis = false;
     audio.setAmbienceBoost(false);
     if (mode === 'normal') app.lastLevel = levelIndex;
     app.screen = 'game';
@@ -307,8 +321,8 @@
     const player = currentPlayer();
     if (!player) return goTitle(); // 게임 중 타자가 사라진 경우(정상 흐름에선 없음)
     const applied = BB.applyGameResult(app.record, {
-      playerKey: key, levelIndex: g.levelIndex, hits: summary.hits, atBats: C.AT_BATS_PER_GAME, mode: g.mode, date,
-      missionDone: summary.missionDone, titles: summary.titles,
+      playerKey: key, levelIndex: g.levelIndex, hits: summary.hits, atBats: g.rules.maxOuts ? summary.atBats : C.AT_BATS_PER_GAME,
+      mode: g.mode, date, missionDone: summary.missionDone, titles: summary.titles, score: summary.score, bossId: summary.bossId,
     });
     setRecord(applied.record);
     app.result = Object.assign(
@@ -325,12 +339,21 @@
   function goTitle() {
     audio.setAmbience(false);
     app.game = null;
+    app.pauseAnalysis = false;
     app.screen = 'title';
+  }
+
+  // 도전 모드 게임·결과에서 '메뉴로'는 도전 모드 화면으로
+  function goMenu() {
+    const mode = app.screen === 'game' && app.game ? app.game.mode : app.screen === 'result' && app.result ? app.result.summary.mode : null;
+    goTitle();
+    if (C.MODES[mode]) app.screen = 'modes';
   }
 
   function setPaused(p) {
     if (!app.game) return;
     app.game.setPaused(p);
+    if (!p) app.pauseAnalysis = false;
     audio.setAmbience(!p);
   }
 
@@ -354,6 +377,19 @@
 
   function doAction(id) {
     if (id.startsWith('level:')) return startGame(Number(id.slice(6)), 'normal');
+    if (id.startsWith('mode:')) return startGame(0, id.slice(5));
+    if (id.startsWith('boss:')) return startGame(0, 'boss', { bossId: id.slice(5) });
+    if (id.startsWith('popt:')) {
+      // 연습 설정 순환: 레벨 / 구종(전체 → 각 구종) / 볼 켜기·끄기
+      const o = app.practiceOpts;
+      const what = id.slice(5);
+      if (what === 'level') o.levelIndex = (o.levelIndex + 1) % C.LEVELS.length;
+      else if (what === 'type') {
+        const types = [null].concat(Object.keys(C.PITCH_TYPES));
+        o.type = types[(types.indexOf(o.type) + 1) % types.length];
+      } else if (what === 'balls') o.balls = !o.balls;
+      return;
+    }
     if (id.startsWith('player:')) {
       const key = id.slice(7);
       if (app.record.players[key]) setRecord(Object.assign({}, app.record, { current: key }));
@@ -371,6 +407,14 @@
     switch (id) {
       case 'challenge':
         return startGame(0, 'challenge');
+      case 'modes':
+        app.screen = 'modes';
+        return;
+      case 'practice':
+        return startGame(0, 'practice', Object.assign({}, app.practiceOpts));
+      case 'pauseAnalysis':
+        app.pauseAnalysis = !app.pauseAnalysis;
+        return;
       case 'changeBatter':
         return openNameDialog(null);
       case 'players':
@@ -410,8 +454,11 @@
       case 'resume':
         return setPaused(false);
       case 'menu':
+        return goMenu();
+      case 'title':
         return goTitle();
       case 'retry':
+        if (app.lastStart) return startGame(app.lastStart.levelIndex, app.lastStart.mode, app.lastStart.opts);
         return startGame(app.result.summary.levelIndex, app.result.summary.mode);
       case 'next':
         return startGame(app.result.summary.levelIndex + 1, 'normal');
@@ -442,10 +489,12 @@
         if (code === 'Escape') setPaused(!app.game.paused);
         else if (app.game.paused) setPaused(false);
       } else if (app.screen === 'result') {
-        if (code === 'Escape') goTitle();
+        if (code === 'Escape') goMenu();
         else doAction('retry');
       } else if (app.screen === 'players') {
         goTitle();
+      } else if (app.screen === 'modes') {
+        if (code === 'Escape') goTitle();
       } else if (app.screen === 'title' && code !== 'Escape') {
         startGame(app.lastLevel, 'normal');
       }
@@ -554,6 +603,7 @@
     else if (!backup.el.hidden) closeBackupDialog();
     else if (app.screen === 'game' && app.game) {
       if (!app.game.paused) setPaused(true); // 경기 중: 일시정지 메뉴
+      else if (app.pauseAnalysis) app.pauseAnalysis = false; // 연습 분석 닫기
       else goTitle(); // 일시정지 중 한 번 더: 타이틀로
     } else if (app.screen !== 'title') goTitle();
     else if (performance.now() >= exitArmedUntil) {
@@ -652,6 +702,8 @@
       game: app.game,
       result: app.result,
       resultTab: app.resultTab,
+      practiceOpts: app.practiceOpts,
+      pauseAnalysis: app.pauseAnalysis,
       hover: app.hover,
       today: today(),
       now: ts / 1000, // 구름 등 장식 애니메이션용

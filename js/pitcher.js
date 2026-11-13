@@ -53,9 +53,11 @@
 
     return {
       // opts.allowBall: false면 반드시 스트라이크 (볼 3개 이후, 볼넷 없음)
+      // opts.speedBonus: 구속 가산(km/h, 서바이벌). 난수 순서에는 영향 없음
       // 난수는 볼 허용 여부와 관계없이 항상 같은 순서로 뽑는다 → 챌린지 투구 순서가 판정 결과에 흔들리지 않음
       nextPitch(opts) {
         const allowBall = !opts || opts.allowBall !== false;
+        const speedBonus = (opts && opts.speedBonus) || 0;
         const w = cellWeights(level.ai, lastIdx, clickHistory, C);
         const idx = rng.pickWeighted(w.map((x, i) => [i, x]));
         lastIdx = idx;
@@ -64,7 +66,7 @@
         const ball = allowBall && ballRoll < (level.ballRate || 0);
         const type = rng.pickWeighted(level.pitchMix);
         const delta = C.PITCH_TYPES[type].speedDelta;
-        const speed = Math.round(level.baseSpeed + delta + rng.range(-C.SPEED_JITTER, C.SPEED_JITTER));
+        const speed = Math.round(level.baseSpeed + speedBonus + delta + rng.range(-C.SPEED_JITTER, C.SPEED_JITTER));
         // 투구 템포: 세트 자세에서 멈추는 시간 + 투구 동작 시간 (투구용 RNG라 챌린지에서도 기기마다 같음)
         const holdSec = rng.range(level.tempo.hold[0], level.tempo.hold[1]);
         const motionSec = rng.range(level.tempo.motion[0], level.tempo.motion[1]);

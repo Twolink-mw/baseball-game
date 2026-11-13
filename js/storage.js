@@ -32,8 +32,13 @@
     return {
       name, bats: 'R', unlocked, best: new Array(NLEVELS).fill(null), hits: 0, atBats: 0, games: 0, daily: null, missions: 0, titles: [],
       streak: 0, streakBest: 0, dailyLog: [], // 챌린지 연속 참여 일수(마지막 공식 판 기준), 최고 연속, 최근 공식 판 기록
+      modes: { survival: null, derby: null }, // 도전 모드 최고 점수(서바이벌 안타 수, 홈런 더비 홈런 수)
+      boss: {}, // 보스 투수별 최고 타율 { id: avg }
     };
   }
+
+  const SCORE_MODES = ['survival', 'derby'];
+  const BOSS_IDS = CONFIG.MODES.boss.pitchers;
 
   // ---- 날짜 (기기 로컬 날짜 문자열 'YYYY-MM-DD') ----
   function shiftDate(dateStr, days) {
@@ -116,6 +121,12 @@
     if (isCount(obj.streak)) p.streak = obj.streak;
     p.streakBest = Math.max(p.streak, isCount(obj.streakBest) ? obj.streakBest : 0);
     p.dailyLog = normalizeLog(obj.dailyLog);
+    if (obj.modes && typeof obj.modes === 'object') {
+      for (const m of SCORE_MODES) if (isCount(obj.modes[m])) p.modes[m] = obj.modes[m];
+    }
+    if (obj.boss && typeof obj.boss === 'object') {
+      for (const id of BOSS_IDS) if (isAvg(obj.boss[id]) && obj.boss[id] !== null) p.boss[id] = obj.boss[id];
+    }
     // 연속 기록이 생기기 전 저장본: 마지막 챌린지 기록을 1일로 본다
     if (p.daily && p.streak === 0) {
       p.streak = 1;
@@ -181,6 +192,8 @@
       (p.streak === undefined || isCount(p.streak)) &&
       (p.streakBest === undefined || isCount(p.streakBest)) &&
       (p.dailyLog === undefined || (Array.isArray(p.dailyLog) && p.dailyLog.every(isLogEntry))) &&
+      (p.modes === undefined || (!!p.modes && typeof p.modes === 'object' && Object.values(p.modes).every((v) => v === null || isCount(v)))) &&
+      (p.boss === undefined || (!!p.boss && typeof p.boss === 'object' && Object.values(p.boss).every((v) => isAvg(v) && v !== null))) &&
       (p.bats === undefined || isBats(p.bats))
     );
   }
@@ -247,13 +260,29 @@
   // 일반 게임: 통산(안타/타수) 누적, 최고 타율, 다음 레벨 해제.
   // 챌린지: 그날 첫 판만 daily에 기록하고, 미션을 달성했으면 누적 달성 횟수 +1
   // titles: 이번 판에서 조건을 만족한 칭호 id (일반 게임만 반영). 결과의 newTitles는 처음 얻은 것
-  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date, missionDone, titles }) {
+  // 도전 모드: survival/derby는 score(최고 점수), boss는 bossId별 최고 타율만 저장. 통산·해제·칭호에는 반영 안 함
+  function applyGameResult(record, { playerKey: key, levelIndex, hits, atBats, mode, date, missionDone, titles, score, bossId }) {
     const r = normalizeRecord(record);
     const p = r.players[key];
     if (!p) throw new Error('없는 타자: ' + key);
     const avg = atBats > 0 ? hits / atBats : 0;
     const careerBefore = careerAvg(p);
     p.games++;
+    if (SCORE_MODES.includes(mode) || mode === 'boss') {
+      let prevBest;
+      let newRecord;
+      if (mode === 'boss') {
+        if (!BOSS_IDS.includes(bossId)) throw new Error('없는 보스: ' + bossId);
+        prevBest = p.boss[bossId] == null ? null : p.boss[bossId];
+        newRecord = prevBest === null ? avg > 0 : avg > prevBest;
+        if (prevBest === null || avg > prevBest) p.boss[bossId] = avg;
+      } else {
+        prevBest = p.modes[mode];
+        newRecord = prevBest === null ? score > 0 : score > prevBest;
+        if (prevBest === null || score > prevBest) p.modes[mode] = score;
+      }
+      return { record: r, official: true, newRecord, prevBest, unlockedLevel: null, careerBefore, careerAfter: careerBefore, newTitles: [] };
+    }
     if (mode === 'challenge') {
       const official = !p.daily || p.daily.date !== date;
       if (official) {
@@ -315,6 +344,8 @@
       if (q.daily && (!p.daily || q.daily.date > p.daily.date)) p.streak = q.streak;
       p.streakBest = Math.max(p.streakBest, q.streakBest, p.streak);
       p.dailyLog = normalizeLog(p.dailyLog.concat(q.dailyLog));
+      for (const m of SCORE_MODES) if (q.modes[m] !== null && (p.modes[m] === null || q.modes[m] > p.modes[m])) p.modes[m] = q.modes[m];
+      for (const id of BOSS_IDS) if (q.boss[id] != null && (p.boss[id] == null || q.boss[id] > p.boss[id])) p.boss[id] = q.boss[id];
       if (!p.daily || (q.daily && q.daily.date > p.daily.date)) p.daily = q.daily ? clone(q.daily) : p.daily;
     }
     return r;

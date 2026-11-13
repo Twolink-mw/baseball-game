@@ -110,13 +110,14 @@
       level: 2, // 바탕 레벨(1부터). 결과는 이 레벨 번호로 저장되지만 최고 타율·해제에는 반영 안 됨
       logDays: 7, // 타이틀 챌린지 카드에 보여 주는 최근 날짜 수 (타자별 dailyLog 보관 개수)
       // 오늘의 투수: 바탕 레벨 값을 덮어쓴다. ai는 random/weak만 (사용자 클릭에 반응하면 기기마다 투구 순서가 달라짐)
+      // id: 도전 모드 '보스 투수' 기록 키
       pitchers: [
-        { name: '정통파', desc: '오늘은 평범한 정통파' },
-        { name: '강속구', desc: '직구 위주의 빠른 공', baseSpeed: 158, ballRate: 0.25, pitchMix: { '직구': 60, '투심': 20, '슬라이더': 20 } },
-        { name: '커브볼러', desc: '느린 커브로 타이밍을 뺏음', baseSpeed: 148, pitchMix: { '직구': 35, '커브': 40, '체인지업': 25 } },
-        { name: '제구 난조', desc: '볼이 많은 투수, 골라내야 산다', ballRate: 0.45 },
-        { name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] } },
-        { name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 } },
+        { id: 'classic', name: '정통파', desc: '오늘은 평범한 정통파' },
+        { id: 'power', name: '강속구', desc: '직구 위주의 빠른 공', baseSpeed: 158, ballRate: 0.25, pitchMix: { '직구': 60, '투심': 20, '슬라이더': 20 } },
+        { id: 'curve', name: '커브볼러', desc: '느린 커브로 타이밍을 뺏음', baseSpeed: 148, pitchMix: { '직구': 35, '커브': 40, '체인지업': 25 } },
+        { id: 'wild', name: '제구 난조', desc: '볼이 많은 투수, 골라내야 산다', ballRate: 0.45 },
+        { id: 'quick', name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] } },
+        { id: 'breaking', name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 } },
       ],
       // 오늘의 미션. stat: homers, hits, strikeouts, extraBases(2루타+홈런), perfects, hitStreak(연속 타석 안타), firstHit(첫 타석 안타 1/0)
       // min: 이 값 이상이면 달성, max: 게임이 끝났을 때 이 값 이하이면 달성
@@ -129,6 +130,18 @@
         { text: '3타석 연속 안타', stat: 'hitStreak', min: 3 },
         { text: '첫 타석 안타', stat: 'firstHit', min: 1 },
       ],
+    },
+
+    // 도전 모드 (타이틀 '도전 모드'). 통산 타율·레벨 해제·칭호에는 반영하지 않고 모드별 최고 기록만 저장
+    MODES: {
+      // 아웃(범타·삼진) maxOuts개까지 안타 수. 타석마다 구속 +speedStep(최대 +speedMax)
+      survival: { name: '서바이벌', desc: '아웃 3개까지 안타를 몇 개?', level: 2, maxOuts: 3, speedStep: 1, speedMax: 12 },
+      // 홈런이 아닌 타석 종료(단타·2루타 포함)는 모두 아웃. 아웃 maxOuts개 안에 홈런 수. 볼 없음, 빠른 공만
+      derby: { name: '홈런 더비', desc: '아웃 10개 안에 홈런을 몇 개?', level: 1, maxOuts: 10, homerOnly: true, override: { ballRate: 0, pitchMix: { '직구': 70, '투심': 30 } } },
+      // 챌린지 투수를 바탕 레벨(level)에 덮어써 10타석. 바탕 레벨이 해제된 타자만
+      boss: { name: '보스 투수', desc: '개성 강한 투수 5명, 투수별 최고 타율', level: 3, pitchers: ['power', 'curve', 'wild', 'quick', 'breaking'] },
+      // 연습: 끝없이 투구, 기록 없음. 레벨·구종·볼 여부를 고름
+      practice: { name: '연습', desc: '골라서 반복 연습 · 기록 없음', logRows: 6, stripCount: 10 },
     },
 
     // 경기 후 분석(결과 화면의 '분석 보기')의 한 줄 평 기준

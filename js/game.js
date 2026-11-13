@@ -31,11 +31,43 @@
     const base = C.LEVELS[CH.level - 1];
     const pitcher = CH.pitchers[BB.hashString('bbgame-challenge-pitcher:' + dateStr) % CH.pitchers.length];
     const mission = CH.missions[BB.hashString('bbgame-challenge-mission:' + dateStr) % CH.missions.length];
+    const level = pitcherLevel(base, pitcher);
+    return Object.assign({ levelIndex: CH.level - 1, level, pitcher, mission }, challengeSeeds(dateStr));
+  }
+
+  // 바탕 레벨에 챌린지 투수 값을 덮어쓴 레벨 (챌린지, 보스 투수)
+  function pitcherLevel(base, pitcher) {
     const over = Object.assign({}, pitcher);
+    delete over.id;
     delete over.name;
     delete over.desc;
-    const level = Object.assign({}, base, over, { title: pitcher.name });
-    return Object.assign({ levelIndex: CH.level - 1, level, pitcher, mission }, challengeSeeds(dateStr));
+    return Object.assign({}, base, over, { title: pitcher.name });
+  }
+
+  // 도전 모드 구성 → { mode, levelIndex, level, rules, modeName, bossId? }
+  // practice opts: { levelIndex, type(구종 이름|null), balls(true면 볼도 던짐) }
+  function modeSetup(modeId, opts, config) {
+    const C = config || BB.CONFIG;
+    const M = C.MODES[modeId];
+    if (!M) throw new Error('없는 모드: ' + modeId);
+    opts = opts || {};
+    if (modeId === 'practice') {
+      const levelIndex = Math.max(0, Math.min(C.LEVELS.length - 1, opts.levelIndex || 0));
+      const level = Object.assign({}, C.LEVELS[levelIndex]);
+      if (opts.type && C.PITCH_TYPES[opts.type]) level.pitchMix = { [opts.type]: 1 };
+      if (!opts.balls) level.ballRate = 0;
+      return { mode: modeId, levelIndex, level, rules: { practice: true }, modeName: M.name };
+    }
+    const levelIndex = M.level - 1;
+    const base = C.LEVELS[levelIndex];
+    if (modeId === 'boss') {
+      const pitcher = C.CHALLENGE.pitchers.find((p) => p.id === opts.bossId && M.pitchers.includes(p.id));
+      if (!pitcher) throw new Error('없는 보스: ' + opts.bossId);
+      return { mode: modeId, levelIndex, level: pitcherLevel(base, pitcher), rules: {}, modeName: M.name + ' ' + pitcher.name, bossId: pitcher.id };
+    }
+    const level = Object.assign({}, base, M.override || {});
+    const rules = { maxOuts: M.maxOuts, homerOnly: !!M.homerOnly, speedStep: M.speedStep || 0, speedMax: M.speedMax || 0 };
+    return { mode: modeId, levelIndex, level, rules, modeName: M.name };
   }
 
   // 연속 타석 안타 최대 길이
@@ -215,11 +247,17 @@
     const pitcher = BB.createPitcher(level, pitchRng, C);
     const judgeFn = opts.judgeFn || BB.judge;
 
+    // rules: { maxOuts?: 아웃 n개면 끝(서바이벌·더비), homerOnly?: 홈런 아닌 타석 종료는 아웃,
+    //          speedStep?/speedMax?: 타석마다 구속 가산, practice?: 끝없이 투구·카운트 없음 }
+    const rules = opts.rules || {};
     const g = {
       config: C,
       level,
       levelIndex: opts.levelIndex,
       mode: opts.mode || 'normal',
+      rules,
+      modeName: opts.modeName || null, // 도전 모드 표시 이름
+      bossId: opts.bossId || null,
       mission: opts.mission || null, // 챌린지 미션
       targets: opts.targets || null, // 승부처 목표 (clutchTargets)
       playerName: opts.playerName || '', // 표시용
@@ -285,7 +323,30 @@
       },
 
       finalAverage() {
+        if (rules.maxOuts) return g.atBatLog.length ? g.stats.hits / g.atBatLog.length : 0;
         return g.stats.hits / C.AT_BATS_PER_GAME;
+      },
+
+      // 도전 모드 아웃 수: 범타·삼진, 홈런 더비는 홈런이 아닌 타석 종료 전부
+      modeOuts() {
+        return g.atBatLog.filter((o) => (rules.homerOnly ? o !== 'HOMERUN' : !HIT_RESULTS[o])).length;
+      },
+
+      // 도전 모드 점수: 홈런 더비는 홈런 수, 나머지는 안타 수
+      score() {
+        return rules.homerOnly ? g.stats.homers : g.stats.hits;
+      },
+
+      // 서바이벌: 지금 타석의 구속 가산
+      speedBonus() {
+        return rules.speedStep ? Math.min(rules.speedMax || Infinity, (g.atBat - 1) * rules.speedStep) : 0;
+      },
+
+      // 지금 타석이 끝났을 때 게임이 끝나는지
+      isOver() {
+        if (rules.practice) return false;
+        if (rules.maxOuts) return g.modeOuts() >= rules.maxOuts;
+        return g.atBat >= C.AT_BATS_PER_GAME;
       },
 
       missionProgress() {
@@ -314,6 +375,12 @@
           totalPitches: g.totalPitches,
           levelIndex: g.levelIndex,
           mode: g.mode,
+          modeName: g.modeName,
+          bossId: g.bossId,
+          rules,
+          score: g.score(),
+          modeOuts: g.modeOuts(),
+          atBats: g.atBatLog.length,
         });
         s.titles = earnedTitles(s, C); // 이번 판에서 조건을 만족한 칭호 (일반 게임만)
         return s;
@@ -327,6 +394,15 @@
 
       // 판정 결과를 카운트에 반영 (테스트에서도 사용)
       applyResult(result, timing) {
+        if (rules.practice) {
+          // 연습: 기록만 하고 카운트·타석은 그대로 (끝없이 투구)
+          if (HIT_RESULTS[result]) {
+            g.stats.hits++;
+            g.stats[HIT_RESULTS[result]]++;
+          } else if (result === 'OUT_BIP') g.stats.outs++;
+          if (timing === 'PERFECT') g.stats.perfects++;
+          return { result, timing, atBatEnded: false, atBatOutcome: null, foulCapped: false };
+        }
         let ended = false;
         let outcome = null;
         let foulCapped = false;
@@ -372,7 +448,7 @@
     }
 
     function startPitch(at) {
-      g.pitch = pitcher.nextPitch({ allowBall: g.balls < C.MAX_BALLS });
+      g.pitch = pitcher.nextPitch({ allowBall: g.balls < C.MAX_BALLS, speedBonus: g.speedBonus() });
       g.pitchLog.push(g.pitch);
       g.pitchInAtBat++;
       g.totalPitches++;
@@ -405,7 +481,7 @@
 
     function nextAfterResult() {
       if (g.last && g.last.atBatEnded) {
-        if (g.atBat >= C.AT_BATS_PER_GAME) {
+        if (g.isOver()) {
           enter('GAME_OVER', g.time);
           g.events.push({ type: 'gameover' });
           return;
@@ -451,7 +527,7 @@
 
   const api = {
     createGame, formatAvg, challengeSeeds, challengeSetup, missionProgress, hitStreak, analyze,
-    clutchTargets, clutchState, earnedTitles,
+    clutchTargets, clutchState, earnedTitles, pitcherLevel, modeSetup,
   };
   if (isNode) module.exports = api;
   else Object.assign((global.BB = global.BB || {}), api);

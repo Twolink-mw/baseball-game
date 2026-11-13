@@ -527,13 +527,27 @@
       roundRect(16, 16, 280, hudHeight(g), 12);
       ctx.fillStyle = 'rgba(10,15,25,0.72)';
       ctx.fill();
+      const R = g.rules || {};
+      const speed = g.level.baseSpeed + (g.speedBonus ? g.speedBonus() : 0);
       const title = g.mode === 'challenge'
         ? view.today.slice(5).replace('-', '/') + ' 챌린지 · ' + g.level.title + ' ' + g.level.baseSpeed + 'km'
-        : g.level.name + ' ' + g.level.title + ' ' + g.level.baseSpeed + 'km';
+        : R.practice
+          ? '연습 · ' + g.level.name + ' ' + speed + 'km'
+          : g.modeName
+            ? g.modeName + ' ' + speed + 'km'
+            : g.level.name + ' ' + g.level.title + ' ' + g.level.baseSpeed + 'km';
       text(g.playerName + (g.bats === 'L' ? ' (좌타)' : ' (우타)'), 32, 40, 22, '#fff', 'left', 'bold');
       text(title, 32, 70, 18, '#ffd34d', 'left', 'bold');
-      text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
-      text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18);
+      if (R.practice) {
+        drawPracticeHud(g);
+        return;
+      }
+      if (R.maxOuts) {
+        text('타석 ' + g.atBat, 32, 98, 18);
+        const outs = g.modeOuts();
+        text('아웃 ' + outs + ' / ' + R.maxOuts, 280, 98, 18, outs >= R.maxOuts - 1 ? '#ff8a8a' : '#fff', 'right', 'bold');
+      } else text('타석 ' + g.atBat + ' / ' + C.AT_BATS_PER_GAME, 32, 98, 18);
+      text('안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18, '#fff', 'left', R.homerOnly || R.maxOuts ? 'bold' : 'normal');
       text('타율 ' + BB.formatAvg(g.currentAverage()), 32, 154, 18);
       text(g.pitchInAtBat + '구 / 총 ' + g.totalPitches + '구', 280, 154, 16, '#ccc', 'right');
       // 볼 카운트(초록) · 스트라이크(노랑)
@@ -547,9 +561,44 @@
       }
     }
 
+    // 연습 HUD: 스윙·코스 맞힘·안타, 최근 스윙 타이밍 띠 (카운트 없음)
+    function drawPracticeHud(g) {
+      const h = g.history;
+      const swings = h.filter((e) => e.clickCell);
+      const matched = swings.filter((e) => e.clickCell.row === e.cell.row && e.clickCell.col === e.cell.col).length;
+      const balls = h.filter((e) => BB.isBallCell(e.cell));
+      text('투구 ' + h.length + '   스윙 ' + swings.length, 32, 98, 18);
+      text('코스 맞힘 ' + matched + '   안타 ' + g.stats.hits + '   홈런 ' + g.stats.homers, 32, 126, 18);
+      text('정확 ' + g.stats.perfects + (balls.length ? '   볼 스윙 ' + balls.filter((e) => e.clickCell).length + '/' + balls.length : ''), 32, 154, 18);
+      // 최근 스윙 타이밍 (빠름 ← 0 → 늦음), 최근 것일수록 진함
+      const recent = swings.filter((e) => typeof e.deltaSec === 'number').slice(-C.MODES.practice.stripCount);
+      const sx = 32;
+      const sw = 248;
+      const sy = 186;
+      const Rng = C.ANALYSIS.stripRange;
+      const px = (d) => sx + sw / 2 + (Math.max(-Rng, Math.min(Rng, d)) / Rng) * (sw / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(sx, sy - 9, sw, 18);
+      ctx.fillStyle = 'rgba(124,242,154,0.2)';
+      ctx.fillRect(px(-C.JUDGE.timing.good), sy - 9, px(C.JUDGE.timing.good) - px(-C.JUDGE.timing.good), 18);
+      ctx.fillStyle = 'rgba(255,211,77,0.35)';
+      ctx.fillRect(px(-C.JUDGE.timing.perfect), sy - 9, px(C.JUDGE.timing.perfect) - px(-C.JUDGE.timing.perfect), 18);
+      recent.forEach((e, i) => {
+        ctx.globalAlpha = 0.35 + 0.65 * ((i + 1) / recent.length);
+        ctx.beginPath();
+        ctx.arc(px(e.deltaSec), sy, i === recent.length - 1 ? 6 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = e.timing === 'PERFECT' ? '#ffd34d' : e.timing === 'GOOD' ? '#7cf29a' : e.deltaSec < 0 ? '#7cc4ff' : '#ff9f5a';
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+      text('빠름', sx, sy + 18, 12, '#7cc4ff', 'left');
+      text('늦음', sx + sw, sy + 18, 12, '#ff9f5a', 'right');
+    }
+
     function drawBoard(g, now) {
       const flash = g.phase === 'RESULT_SHOW' && g.last ? BOARD_FLASH[g.last.result] || null : null;
-      S.drawScoreboard(ctx, 'BB 스타디움', g.playerName + ' · ' + BB.formatAvg(g.currentAverage()), flash, now);
+      const sub = g.rules && g.rules.practice ? '연습' : g.rules && g.rules.maxOuts ? (g.rules.homerOnly ? '홈런 ' : '안타 ') + g.score() + '개' : BB.formatAvg(g.currentAverage());
+      S.drawScoreboard(ctx, 'BB 스타디움', g.playerName + ' · ' + sub, flash, now);
     }
 
     // ---- 투구 기록 패널 (화면 오른쪽) ----
@@ -584,8 +633,10 @@
 
     // 위: 이번 타석(미니 존 + 목록), 아래: 직전 타석(다음 타석이 끝날 때까지 유지)
     function drawPitchLog(g, x) {
-      const cur = g.history.filter((h) => h.atBat === g.atBat);
-      const prev = g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
+      // 연습은 타석이 끝나지 않으므로 최근 몇 개만
+      const practice = !!(g.rules && g.rules.practice);
+      const cur = practice ? g.history.slice(-C.MODES.practice.logRows) : g.history.filter((h) => h.atBat === g.atBat);
+      const prev = !practice && g.atBat > 1 ? g.history.filter((h) => h.atBat === g.atBat - 1) : [];
       x = x == null ? LOG_X_RIGHT : x;
       const onLeft = x < L.width / 2; // 왼쪽이면 HUD 아래부터
       const y = onLeft ? 16 + hudHeight(g) + 12 : 150;
@@ -607,7 +658,7 @@
       roundRect(x, y, w, h, 12);
       ctx.fillStyle = 'rgba(10,15,25,0.85)';
       ctx.fill();
-      text(g.atBat + '번째 타석', x + 16, y + 22, 18, '#ffd34d', 'left', 'bold');
+      text(practice ? '최근 투구' : g.atBat + '번째 타석', x + 16, y + 22, 18, '#ffd34d', 'left', 'bold');
       // 미니 존: 공이 들어온 칸에 투구 번호
       ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 1;
@@ -622,7 +673,7 @@
       const center = (c) => ({ x: zx + cs * (c.col + 0.5), y: zy + cs * (c.row + 0.5) });
       const last = cur[cur.length - 1];
       // 이번 타석 볼/스트라이크 카운트
-      text('B ' + g.balls + '  S ' + g.strikes, x + w - 16, y + 22, 18, '#dfe6ee', 'right', 'bold');
+      if (!practice) text('B ' + g.balls + '  S ' + g.strikes, x + w - 16, y + 22, 18, '#dfe6ee', 'right', 'bold');
       if (last && last.clickCell) {
         // 직전 투구에서 휘두른 칸
         const p = center(last.clickCell);
@@ -719,7 +770,7 @@
       if (g.phase === 'AT_BAT_INTRO') {
         const e = g.phaseElapsed();
         ctx.globalAlpha = clamp01(e / 0.2) * clamp01((C.AT_BAT_INTRO_SEC - e) / 0.2 + 0.3);
-        outlined(g.atBat + '번째 타석', 640, 150 - 10 * clamp01(e / 0.3), 44, '#fff');
+        outlined(g.rules && g.rules.practice ? '연습 시작' : g.atBat + '번째 타석', 640, 150 - 10 * clamp01(e / 0.3), 44, '#fff');
         const c = g.clutch && g.clutch();
         if (c) outlined(clutchText(c), 640, 204, 32, '#ffd34d');
         ctx.globalAlpha = 1;
@@ -794,6 +845,17 @@
       }
       if (g.paused) {
         hits = [];
+        const practice = !!(g.rules && g.rules.practice);
+        if (practice && view.pauseAnalysis) {
+          // 연습 중 지금까지의 분석
+          ctx.fillStyle = 'rgba(8,14,26,0.9)';
+          ctx.fillRect(-ox, 0, LW, L.height);
+          text('연습 분석 · 투구 ' + g.history.length + '개', 640, 50, 30, '#cde', 'center', 'bold');
+          drawAnalysis(BB.analyze(g.history), 100);
+          button('pauseAnalysis', 640 - 222, 610, 210, 60, '돌아가기');
+          button('resume', 640 + 12, 610, 210, 60, '계속하기', { primary: true });
+          return;
+        }
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(-ox, 0, LW, L.height);
         drawPitchLog(g, logX); // 멈춘 채로 투구 기록을 볼 수 있게 덮개 위에 다시 그림
@@ -803,6 +865,7 @@
         // 소리, (터치 기기) 패드 위치
         muteButton(view, touch ? 640 - 110 : 640, 430, 64);
         if (touch) button('padSide', 640 + 10, 400, 200, 60, '패드: ' + (padLeft ? '왼쪽' : '오른쪽'), { size: 20 });
+        if (practice) button('pauseAnalysis', 640 - 100, touch ? 480 : 490, 200, 56, '분석 보기', { size: 20 });
       }
     }
 
@@ -910,12 +973,101 @@
         : '조작: 마우스/터치로 칸 선택 · 키보드 7 8 9 / 4 5 6 / 1 2 3 또는 Q W E / A S D / Z X C · M 소리 켜기/끄기';
       text(hint, 640, 600, 16, '#bcd', 'center');
       button('players', 20, L.height - 70, 170, 50, '타자 기록', { size: 18 });
-      if (C.SHOW_BACKUP) button('backup', 206, L.height - 70, 170, 50, '기록 백업', { size: 18 });
+      button('modes', 206, L.height - 70, 170, 50, '도전 모드', { size: 18, primary: true });
+      if (C.SHOW_BACKUP) button('backup', 392, L.height - 70, 170, 50, '기록 백업', { size: 18 });
       muteButton(view, L.width - 46, 42, 52);
       if (view.canFullscreen) button('fullscreen', 20, 16, 150, 44, view.isFullscreen ? '전체화면 끄기' : '전체화면', { size: 18 });
       if (view.iosHint) text('소리가 안 나면 무음 스위치를 확인하세요', 640, 626, 15, '#9ab', 'center');
 
       button('reset', L.width - 190, L.height - 70, 170, 50, '기록 초기화', { size: 18 });
+    }
+
+    // ---- 도전 모드 화면: 서바이벌 · 홈런 더비 · 연습(위), 보스 투수(아래) ----
+    function modeCard(x, y, w, h, color) {
+      roundRect(x, y, w, h, 16);
+      ctx.fillStyle = 'rgba(20,32,52,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawModes(view) {
+      drawBackdrop(view.now, 'rgba(8,14,26,0.7)');
+      outlined('도전 모드', 640, 50, 40, '#fff');
+      text('통산 타율·레벨 해제에는 반영되지 않고, 모드별 최고 기록만 남습니다', 640, 92, 17, '#bcd', 'center');
+      const p = view.player;
+      const M = C.MODES;
+      const cw = 360;
+      const gap = 30;
+      const x0 = 640 - (cw * 3 + gap * 2) / 2;
+      const y = 120;
+      const h = 230;
+      // 점수 모드 카드
+      [['survival', '#ffd34d', '최고 안타 '], ['derby', '#ff7b5a', '최고 홈런 ']].forEach(([id, col, label], i) => {
+        const x = x0 + i * (cw + gap);
+        const m = M[id];
+        modeCard(x, y, cw, h, col);
+        text(m.name, x + cw / 2, y + 40, 32, col, 'center', 'bold');
+        text(m.desc, x + cw / 2, y + 84, 19, '#fff', 'center', 'bold');
+        const lv = C.LEVELS[m.level - 1];
+        const extra = id === 'survival' ? ' · 타석마다 +' + m.speedStep + 'km' : ' · 볼 없음';
+        text(lv.name + ' 투수 ' + lv.baseSpeed + 'km' + extra, x + cw / 2, y + 116, 16, '#bcd', 'center');
+        const best = p && p.modes[id];
+        text(label + (best == null ? '-' : best + '개'), x + cw / 2, y + 152, 20, '#dde', 'center');
+        text('플레이 ▶', x + cw / 2, y + 196, 22, '#8fd', 'center', 'bold');
+        hits.push({ id: 'mode:' + id, x, y, w: cw, h });
+      });
+      // 연습 카드: 설정 버튼 3개 + 시작
+      {
+        const x = x0 + 2 * (cw + gap);
+        const o = view.practiceOpts;
+        modeCard(x, y, cw, h, '#7cc4ff');
+        text(M.practice.name, x + cw / 2, y + 36, 32, '#7cc4ff', 'center', 'bold');
+        text(M.practice.desc, x + cw / 2, y + 72, 16, '#bcd', 'center');
+        const lv = C.LEVELS[o.levelIndex];
+        const bw = (cw - 40 - 16) / 3;
+        button('popt:level', x + 20, y + 92, bw, 48, lv.name + ' ' + lv.baseSpeed, { size: 16 });
+        button('popt:type', x + 20 + bw + 8, y + 92, bw, 48, o.type || '전 구종', { size: 16 });
+        button('popt:balls', x + 20 + (bw + 8) * 2, y + 92, bw, 48, o.balls ? '볼 있음' : '볼 없음', { size: 16 });
+        text('버튼을 눌러 바꾸기', x + cw / 2, y + 152, 14, '#9ab', 'center');
+        button('practice', x + 60, y + 166, cw - 120, 50, '연습 시작 ▶', { primary: true, size: 20 });
+      }
+      // 보스 투수
+      const by = 380;
+      const bossOpen = !!(p && p.unlocked[M.boss.level - 1]);
+      const base = C.LEVELS[M.boss.level - 1];
+      modeCard(x0, by, cw * 3 + gap * 2, 230, bossOpen ? '#c792ff' : 'rgba(255,255,255,0.25)');
+      text(M.boss.name, x0 + 24, by + 34, 28, bossOpen ? '#c792ff' : '#888', 'left', 'bold');
+      text(M.boss.desc + ' · ' + base.name + '(' + base.title + ')를 바탕으로 10타석', x0 + 170, by + 34, 17, bossOpen ? '#dde' : '#999', 'left');
+      const ids = M.boss.pitchers;
+      const bw = (cw * 3 + gap * 2 - 48 - (ids.length - 1) * 14) / ids.length;
+      ids.forEach((id, i) => {
+        const pi = C.CHALLENGE.pitchers.find((q) => q.id === id);
+        const lvl = BB.pitcherLevel(base, pi);
+        const x = x0 + 24 + i * (bw + 14);
+        const yy = by + 64;
+        roundRect(x, yy, bw, 146, 12);
+        ctx.fillStyle = bossOpen ? 'rgba(199,146,255,0.12)' : 'rgba(0,0,0,0.4)';
+        ctx.fill();
+        ctx.strokeStyle = bossOpen ? 'rgba(199,146,255,0.6)' : 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        text(pi.name, x + bw / 2, yy + 30, 22, bossOpen ? '#fff' : '#888', 'center', 'bold');
+        text(lvl.baseSpeed + 'km', x + bw / 2, yy + 60, 17, bossOpen ? '#ffd34d' : '#777', 'center');
+        text(pi.desc, x + bw / 2, yy + 88, 13, bossOpen ? '#bcd' : '#777', 'center');
+        const best = p && p.boss[id];
+        text('최고 ' + (best == null ? '-' : BB.formatAvg(best)), x + bw / 2, yy + 120, 17, bossOpen ? '#dde' : '#777', 'center', 'bold');
+        if (bossOpen) hits.push({ id: 'boss:' + id, x, y: yy, w: bw, h: 146 });
+      });
+      if (!bossOpen) {
+        roundRect(x0 + 300, by + 108, cw * 3 + gap * 2 - 600, 56, 28);
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fill();
+        text('🔒 ' + base.name + '를 해제하면 열립니다', 640, by + 136, 20, '#ddd', 'center', 'bold');
+      }
+      button('title', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
+      muteButton(view, L.width - 46, 42, 52);
     }
 
     // 칭호 표시: 왼쪽 가운데(x, cy)부터 테두리 있는 작은 글자. 폭을 돌려줌
@@ -1074,18 +1226,30 @@
         button('menu', 640 + 12, 610, bw, 60, '메뉴로');
         return;
       }
-      const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + ' · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
+      const scoreMode = !!(s.rules && s.rules.maxOuts); // 서바이벌·홈런 더비: 점수(개수)가 주인공
+      const title = s.mode === 'challenge'
+        ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + ' · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)')
+        : s.modeName ? s.modeName + ' 결과' : C.LEVELS[s.levelIndex].name + ' 결과';
       text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
       const e = view.now - (r.shownAt || 0); // 결과 화면에 들어온 뒤 경과(초)
-      text('이번 타율', 640, 118, 24, '#aaa', 'center');
-      // 안타 수를 하나씩 세며 타율이 올라감
+      // 하나씩 세며 올라감
       const k = clamp01(e / 0.7);
-      const shownHits = Math.round((1 - (1 - k) * (1 - k)) * s.hits);
-      text(BB.formatAvg(shownHits / C.AT_BATS_PER_GAME), 640, 196, 104, '#ffd34d', 'center', 'bold');
+      const ease = 1 - (1 - k) * (1 - k);
+      if (scoreMode) {
+        text(s.mode === 'derby' ? '홈런' : '안타', 640, 118, 24, '#aaa', 'center');
+        text(Math.round(ease * s.score) + '개', 640, 196, 104, '#ffd34d', 'center', 'bold');
+      } else {
+        text('이번 타율', 640, 118, 24, '#aaa', 'center');
+        text(BB.formatAvg(Math.round(ease * s.hits) / C.AT_BATS_PER_GAME), 640, 196, 104, '#ffd34d', 'center', 'bold');
+      }
       let y = 280;
-      const avgOr = (x) => (x === null ? '-' : BB.formatAvg(x));
+      const avgOr = (x) => (x === null || x === undefined ? '-' : BB.formatAvg(x));
       if (s.mode === 'normal') {
         text('통산 타율 ' + avgOr(r.careerBefore) + ' → ' + avgOr(r.careerAfter) + '  (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, y, 24, '#fff', 'center', 'bold');
+      } else if (scoreMode) {
+        text(s.atBats + '타석 · 아웃 ' + s.modeOuts + ' · 이전 최고 ' + (r.prevBest == null ? '-' : r.prevBest + '개'), 640, y, 24, '#fff', 'center', 'bold');
+      } else if (s.mode === 'boss') {
+        text('이 투수 상대 이전 최고 ' + avgOr(r.prevBest), 640, y, 24, '#fff', 'center', 'bold');
       } else {
         // 타석별 결과 격자 + 미션
         drawOutcomeGrid(s.atBatLog, 640, y - 22, 48);
@@ -1186,6 +1350,7 @@
       else if (view.screen === 'game') drawGame(view);
       else if (view.screen === 'result') drawResult(view);
       else if (view.screen === 'players') drawPlayers(view);
+      else if (view.screen === 'modes') drawModes(view);
       if (view.toast) drawToast(view.toast);
       return hits;
     }
@@ -1204,15 +1369,24 @@
         text('타자 시점 야구', 48, 50, 26, '#cfe', 'left', 'bold');
         text(r.date.replace(/-/g, '.'), L.width - 48, 50, 24, '#cfe', 'right');
         const bats = r.player && r.player.bats === 'L' ? '좌타' : '우타';
+        const scoreMode = !!(s.rules && s.rules.maxOuts);
         const mode =
           s.mode === 'challenge'
             ? r.date.slice(5).replace('-', '/') + ' 챌린지 · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)')
-            : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title + ' · ' + C.LEVELS[s.levelIndex].baseSpeed + 'km';
+            : s.modeName
+              ? '도전 모드 · ' + s.modeName
+              : C.LEVELS[s.levelIndex].name + ' ' + C.LEVELS[s.levelIndex].title + ' · ' + C.LEVELS[s.levelIndex].baseSpeed + 'km';
         outlined(r.playerName, 640, 150, 56, '#ffd34d');
         text(bats + ' · ' + mode, 640, 210, 28, '#fff', 'center', 'bold');
-        text('이번 타율', 640, 280, 26, '#aab', 'center');
-        outlined(BB.formatAvg(s.avg), 640, 370, 130, '#ffd34d');
-        text(s.hits + '안타 / ' + C.AT_BATS_PER_GAME + '타수 · 홈런 ' + s.homers + ' · 2루타 ' + s.doubles + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
+        if (scoreMode) {
+          text(s.mode === 'derby' ? '홈런' : '안타', 640, 280, 26, '#aab', 'center');
+          outlined(s.score + '개', 640, 370, 130, '#ffd34d');
+          text(s.atBats + '타석 · 안타 ' + s.hits + ' · 홈런 ' + s.homers + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
+        } else {
+          text('이번 타율', 640, 280, 26, '#aab', 'center');
+          outlined(BB.formatAvg(s.avg), 640, 370, 130, '#ffd34d');
+          text(s.hits + '안타 / ' + C.AT_BATS_PER_GAME + '타수 · 홈런 ' + s.homers + ' · 2루타 ' + s.doubles + ' · 삼진 ' + s.strikeouts, 640, 470, 28, '#fff', 'center');
+        }
         if (s.mode === 'normal' && r.careerAfter !== null) {
           text('통산 타율 ' + BB.formatAvg(r.careerAfter) + ' (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, 520, 26, '#cde', 'center', 'bold');
         }

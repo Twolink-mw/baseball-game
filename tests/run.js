@@ -938,6 +938,125 @@ section('챌린지 연속 참여');
   });
 }
 
+section('도전 모드');
+{
+  const { modeSetup, pitcherLevel, challengeSetup } = require('../js/game.js');
+  const modeGame = (modeId, results, opts) => {
+    const s = modeSetup(modeId, opts, CONFIG);
+    return createGame({ levelIndex: s.levelIndex, level: s.level, mode: s.mode, rules: s.rules, modeName: s.modeName, bossId: s.bossId, pitchSeed: 1, judgeSeed: 2, judgeFn: scriptedJudge(results) });
+  };
+  const playAtBat = (g) => {
+    let last;
+    do last = playPitch(g);
+    while (!last.atBatEnded && g.phase !== 'GAME_OVER');
+    return last;
+  };
+  test('서바이벌: 범타·삼진 3개면 끝, 안타는 아웃 아님, 점수 = 안타, 타석마다 구속 상승', () => {
+    const g = modeGame('survival', ['SINGLE', 'OUT_BIP', 'DOUBLE', 'SWING_MISS', 'SWING_MISS', 'SWING_MISS', 'HOMERUN', 'OUT_BIP']);
+    const speeds = [];
+    for (let i = 0; i < 6; i++) {
+      runUntil(g, (x) => x.phase === 'PITCH_FLIGHT' || x.phase === 'GAME_OVER');
+      if (g.phase === 'GAME_OVER') break;
+      speeds.push(g.speedBonus());
+      playAtBat(g);
+    }
+    assert.equal(g.phase, 'GAME_OVER');
+    assert.deepEqual(speeds, [0, 1, 2, 3, 4, 5]);
+    const s = g.summary();
+    assert.equal(s.score, 3);
+    assert.equal(s.modeOuts, 3);
+    assert.equal(s.atBats, 6);
+    assert.equal(s.avg, 0.5);
+    assert.deepEqual(s.titles, []); // 도전 모드는 칭호 없음
+  });
+  test('서바이벌 구속 가산은 speedMax까지, 투구 구속에 반영', () => {
+    const g = modeGame('survival', []);
+    g.atBat = 100;
+    assert.equal(g.speedBonus(), CONFIG.MODES.survival.speedMax);
+    const base = createPitcher(g.level, createRng(9), CONFIG).nextPitch();
+    const fast = createPitcher(g.level, createRng(9), CONFIG).nextPitch({ speedBonus: 7 });
+    assert.equal(fast.speed - base.speed, 7);
+    assert.ok(fast.flightSec < base.flightSec);
+    assert.deepEqual(fast.cell, base.cell); // 난수 순서는 그대로
+  });
+  test('홈런 더비: 홈런이 아닌 타석 종료는 모두 아웃, 볼 없음, 빠른 공만', () => {
+    const results = ['HOMERUN', 'SINGLE'].concat(new Array(9).fill('OUT_BIP'));
+    const g = modeGame('derby', results);
+    for (let i = 0; i < 11 && g.phase !== 'GAME_OVER'; i++) playAtBat(g);
+    runUntil(g, (x) => x.phase === 'GAME_OVER');
+    const s = g.summary();
+    assert.equal(s.score, 1);
+    assert.equal(s.modeOuts, 10);
+    assert.equal(s.atBats, 11);
+    const p = createPitcher(g.level, createRng(3), CONFIG);
+    for (let i = 0; i < 300; i++) {
+      const x = p.nextPitch();
+      assert.ok(!x.ball && (x.type === '직구' || x.type === '투심'));
+    }
+  });
+  test('보스 투수: 챌린지 투수 값을 바탕 레벨에 덮어씀, 10타석, 모르는 보스는 오류', () => {
+    const s = modeSetup('boss', { bossId: 'curve' }, CONFIG);
+    const base = CONFIG.LEVELS[CONFIG.MODES.boss.level - 1];
+    assert.equal(s.level.baseSpeed, 148);
+    assert.equal(s.level.revealSec, base.revealSec);
+    assert.equal(s.level.ai, base.ai);
+    assert.equal(s.level.title, '커브볼러');
+    assert.equal(s.level.id, base.id); // 투수 id가 레벨 id를 덮지 않음
+    assert.throws(() => modeSetup('boss', { bossId: 'classic' }, CONFIG));
+    const g = modeGame('boss', new Array(10).fill('OUT_BIP'), { bossId: 'curve' });
+    for (let i = 0; i < 10; i++) playAtBat(g);
+    runUntil(g, (x) => x.phase === 'GAME_OVER');
+    assert.equal(g.summary().atBats, 10);
+    // 챌린지 구성도 같은 함수를 씀
+    const ch = challengeSetup('2026-11-13', CONFIG);
+    assert.deepEqual(ch.level, pitcherLevel(CONFIG.LEVELS[CONFIG.CHALLENGE.level - 1], ch.pitcher));
+  });
+  test('연습: 카운트·타석 없이 계속, GAME_OVER 없음, 구종·볼 선택', () => {
+    const g = modeGame('practice', new Array(40).fill('SWING_MISS').concat(['SINGLE']), { levelIndex: 2, type: '커브', balls: false });
+    for (let i = 0; i < 41; i++) playPitch(g);
+    assert.equal(g.phase === 'GAME_OVER', false);
+    assert.equal(g.atBat, 1);
+    assert.equal(g.strikes, 0);
+    assert.equal(g.stats.hits, 1);
+    assert.equal(g.history.length, 41);
+    assert.ok(g.history.every((h) => h.type === '커브'));
+    assert.equal(g.level.baseSpeed, CONFIG.LEVELS[2].baseSpeed);
+    const all = modeSetup('practice', { levelIndex: 0, type: null, balls: true }, CONFIG);
+    assert.deepEqual(all.level.pitchMix, CONFIG.LEVELS[0].pitchMix);
+    assert.equal(all.level.ballRate, CONFIG.LEVELS[0].ballRate);
+  });
+  test('도전 모드 기록: 최고 점수·보스별 최고 타율만, 통산·해제 영향 없음, 검증·병합', () => {
+    let r = S.ensurePlayer(S.defaultRecord(), '가').record;
+    let a = S.applyGameResult(r, { playerKey: '가', levelIndex: 1, hits: 7, atBats: 9, mode: 'survival', score: 7 });
+    assert.equal(a.newRecord, true);
+    assert.equal(a.prevBest, null);
+    a = S.applyGameResult(a.record, { playerKey: '가', levelIndex: 1, hits: 5, atBats: 8, mode: 'survival', score: 5 });
+    assert.equal(a.newRecord, false);
+    assert.equal(a.prevBest, 7);
+    a = S.applyGameResult(a.record, { playerKey: '가', levelIndex: 0, hits: 4, atBats: 14, mode: 'derby', score: 4 });
+    a = S.applyGameResult(a.record, { playerKey: '가', levelIndex: 2, hits: 6, atBats: 10, mode: 'boss', bossId: 'wild' });
+    const p = a.record.players['가'];
+    assert.deepEqual(p.modes, { survival: 7, derby: 4 });
+    assert.deepEqual(p.boss, { wild: 0.6 });
+    assert.equal(p.atBats, 0);
+    assert.deepEqual(p.unlocked, [true, false, false]);
+    assert.equal(p.games, 4);
+    assert.throws(() => S.applyGameResult(a.record, { playerKey: '가', levelIndex: 2, hits: 1, atBats: 10, mode: 'boss', bossId: 'nope' }));
+    const n = S.normalizeRecord({ v: 2, players: { x: { name: 'x', modes: { survival: 3, derby: -1, foo: 2 }, boss: { curve: 0.3, nope: 0.5, wild: 2 } } } }).players.x;
+    assert.deepEqual(n.modes, { survival: 3, derby: null });
+    assert.deepEqual(n.boss, { curve: 0.3 });
+    const bad = JSON.parse(S.exportRecord(a.record));
+    bad.players['가'].boss.wild = 'x';
+    assert.equal(S.validateRecord(bad), null);
+    const other = S.ensurePlayer(S.defaultRecord(), '가').record;
+    other.players['가'].modes.survival = 9;
+    other.players['가'].boss = { wild: 0.4, curve: 0.5 };
+    const m = S.mergeRecords(a.record, other).players['가'];
+    assert.deepEqual(m.modes, { survival: 9, derby: 4 });
+    assert.deepEqual(m.boss, { wild: 0.6, curve: 0.5 });
+  });
+}
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {
