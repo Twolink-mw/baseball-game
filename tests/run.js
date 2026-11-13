@@ -734,6 +734,63 @@ test('기록 백업: 내보내기 → 다른 기기 가져오기 왕복, 잘못�
   assert.deepEqual(r1.added, ['옛타자']);
 });
 
+section('경기 후 분석');
+{
+  const { analyze } = require('../js/game.js');
+  const P = (type, cell, click, result, timing, deltaSec) => ({
+    atBat: 1, n: 1, type, speed: 150, cell, clickCell: click, result, timing, deltaSec,
+  });
+  const c = (row, col) => ({ row, col });
+  test('코스별·구종별·타이밍·선구안 집계', () => {
+    const h = [
+      P('직구', c(0, 0), c(0, 0), 'SINGLE', 'PERFECT', 0.01),
+      P('직구', c(0, 0), c(0, 1), 'FOUL', 'GOOD', -0.1),
+      P('커브', c(2, 1), c(2, 1), 'OUT_BIP', 'BAD', -0.2),
+      P('커브', c(-1, 1), c(0, 1), 'SWING_MISS', 'BAD', 0.13),
+      P('커브', c(1, 3), null, 'BALL', 'NONE', null),
+      P('직구', c(1, 1), null, 'LOOKING', 'NONE', null),
+    ];
+    const a = analyze(h, CONFIG);
+    assert.deepEqual(a.byCell[0], { pitches: 2, swings: 2, matched: 1, hits: 1 });
+    assert.deepEqual(a.byCell[7], { pitches: 1, swings: 1, matched: 1, hits: 0 });
+    assert.equal(a.byCell[4].pitches, 1);
+    assert.deepEqual(a.byType['커브'], { pitches: 3, swings: 2, hits: 0, misses: 1, early: 1, late: 1 });
+    assert.equal(a.timing.swings, 4);
+    assert.equal(a.timing.perfect, 1);
+    assert.equal(a.timing.good, 1);
+    assert.equal(a.timing.early, 1);
+    assert.equal(a.timing.late, 1);
+    assert.ok(Math.abs(a.timing.mean - (0.01 - 0.1 - 0.2 + 0.13) / 4) < 1e-9);
+    assert.deepEqual(a.discipline, { balls: 2, chased: 1, looking: 1 });
+  });
+  test('한 줄 평: 볼 스윙·구종 타이밍·약한 높이, 최대 개수 제한', () => {
+    const balls = [0, 1, 2].map(() => P('직구', c(3, 1), c(2, 1), 'SWING_MISS', 'GOOD', 0));
+    let a = analyze(balls, CONFIG);
+    assert.ok(a.tips[0].startsWith('볼 3개 중 3개'), a.tips[0]);
+    const curves = [0, 1, 2].map(() => P('커브', c(1, 1), c(1, 1), 'FOUL', 'BAD', -0.2));
+    a = analyze(curves, CONFIG);
+    assert.ok(a.tips.some((t) => t.startsWith('커브에 3번 중 3번 빨랐어요')), a.tips.join(' / '));
+    const low = [0, 1, 2].map((i) => P('직구', c(2, i), c(1, i), 'SWING_MISS', 'GOOD', 0));
+    a = analyze(low, CONFIG);
+    assert.ok(a.tips.some((t) => t.startsWith('낮은 공에 3번 스윙해 0번')), a.tips.join(' / '));
+    a = analyze(balls.concat(curves, low), CONFIG);
+    assert.equal(a.tips.length, CONFIG.ANALYSIS.maxTips);
+    assert.deepEqual(analyze([], CONFIG).tips, []);
+  });
+  test('게임 요약에 분석 포함, 볼에 스윙하면 chases 증가', () => {
+    const g = newGame(['BALL', 'SINGLE']);
+    g.pitch = null;
+    runUntil(g, (x) => x.phase === 'PITCH_FLIGHT');
+    g.pitch.cell = { row: -1, col: 1 }; // 볼로 바꿔 스윙
+    g.input({ row: 0, col: 1 }, g.arrivalTime);
+    runUntil(g, (x) => x.phase === 'RESULT_SHOW');
+    assert.equal(g.stats.chases, 1);
+    assert.equal(g.history[0].deltaSec, 0);
+    const s = g.summary();
+    assert.equal(s.analysis.discipline.chased, 1);
+  });
+}
+
 section('관중 녹음 내장 도구');
 // 가짜 mp3: MPEG1 Layer III 128kbps 44.1kHz 프레임(417바이트, 0.0261초)을 n개, 앞에 ID3 태그
 function fakeMp3(n, withId3) {

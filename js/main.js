@@ -13,6 +13,7 @@
     record: BB.storage.load(),
     game: null,
     result: null,
+    resultTab: 'summary', // 결과 화면 탭: summary | analysis
     hover: null,
     hits: [],
     lastFrameTs: null,
@@ -312,6 +313,7 @@
     );
     app.game = null;
     app.screen = 'result';
+    app.resultTab = 'summary';
     audio.setAmbience(false);
     audio.fanfare(applied.newRecord || applied.unlockedLevel !== null, summary.avg);
   }
@@ -393,6 +395,12 @@
         return openBackupDialog();
       case 'share':
         return shareResult();
+      case 'tab:analysis':
+        app.resultTab = 'analysis';
+        return;
+      case 'tab:summary':
+        app.resultTab = 'summary';
+        return;
       case 'pause':
         return setPaused(true);
       case 'resume':
@@ -639,6 +647,7 @@
       page: app.page,
       game: app.game,
       result: app.result,
+      resultTab: app.resultTab,
       hover: app.hover,
       today: today(),
       now: ts / 1000, // 구름 등 장식 애니메이션용

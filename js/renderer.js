@@ -905,10 +905,93 @@
       button('menu', L.width - 150, L.height - 70, 130, 50, '메뉴로', { size: 20 });
     }
 
+    // ---- 경기 후 분석 (결과 화면 '분석 보기', 연습 모드 일시정지) ----
+    // a: game.analyze() 결과. y0~y0+400 영역에 한 줄 평, 코스 칸, 구종 표, 타이밍 띠·선구안을 그린다
+    function drawAnalysis(a, y0) {
+      // 한 줄 평
+      const tips = a.tips.length ? a.tips : ['스윙 기록이 적어서 아직 평가할 것이 없어요'];
+      tips.forEach((t, i) => text('· ' + t, 640, y0 + i * 30, 20, i === 0 && a.tips.length ? '#ffe9a0' : '#dde', 'center', 'bold'));
+      const top = y0 + 72;
+
+      // 왼쪽: 코스별 (맞힌 칸 수 / 들어온 공), 색이 진할수록 안타가 많음
+      const cs = 92;
+      const gx = 110;
+      text('코스별  맞힘 / 투구', gx + cs * 1.5, top, 18, '#9ab', 'center', 'bold');
+      for (let i = 0; i < 9; i++) {
+        const c = a.byCell[i];
+        const x = gx + (i % 3) * cs;
+        const y = top + 22 + Math.floor(i / 3) * cs;
+        const rate = c.pitches ? c.hits / c.pitches : 0;
+        ctx.fillStyle = c.pitches ? 'rgba(255,211,77,' + (0.1 + 0.6 * rate).toFixed(2) + ')' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(x, y, cs, cs);
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, cs, cs);
+        if (c.pitches) {
+          text(c.matched + ' / ' + c.pitches, x + cs / 2, y + cs / 2 - 10, 22, '#fff', 'center', 'bold');
+          text(c.hits ? '안타 ' + c.hits : '-', x + cs / 2, y + cs / 2 + 18, 15, c.hits ? '#ffe9a0' : '#9ab', 'center');
+        }
+      }
+
+      // 가운데: 구종별
+      const tx = 470;
+      const cols = [['구종', tx, 'left'], ['투구', tx + 130, 'center'], ['스윙', tx + 200, 'center'], ['안타', tx + 270, 'center'], ['헛스윙', tx + 340, 'center']];
+      for (const [label, x, al] of cols) text(label, x, top, 18, '#9ab', al, 'bold');
+      Object.keys(C.PITCH_TYPES).filter((k) => a.byType[k]).forEach((k, i) => {
+        const t = a.byType[k];
+        const y = top + 40 + i * 40;
+        const vals = [k, t.pitches, t.swings, t.hits, t.misses];
+        vals.forEach((v, j) => text(String(v), cols[j][1], y, 20, j === 3 && t.hits ? '#ffd34d' : '#fff', cols[j][2], j === 0 ? 'bold' : 'normal'));
+      });
+
+      // 오른쪽: 타이밍 띠 (빠름 ← 0 → 늦음), 스윙마다 점
+      const sx = 880;
+      const sw = 300;
+      const sy = top + 60;
+      const R = C.ANALYSIS.stripRange;
+      text('타이밍', sx + sw / 2, top, 18, '#9ab', 'center', 'bold');
+      const px = (d) => sx + sw / 2 + (Math.max(-R, Math.min(R, d)) / R) * (sw / 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(sx, sy - 22, sw, 44);
+      ctx.fillStyle = 'rgba(124,242,154,0.18)';
+      ctx.fillRect(px(-C.JUDGE.timing.good), sy - 22, px(C.JUDGE.timing.good) - px(-C.JUDGE.timing.good), 44);
+      ctx.fillStyle = 'rgba(255,211,77,0.3)';
+      ctx.fillRect(px(-C.JUDGE.timing.perfect), sy - 22, px(C.JUDGE.timing.perfect) - px(-C.JUDGE.timing.perfect), 44);
+      const COLOR = { PERFECT: '#ffd34d', GOOD: '#7cf29a' };
+      a.timing.deltas.forEach((e, i) => {
+        ctx.beginPath();
+        ctx.arc(px(e.d), sy - 12 + (i % 4) * 8, 5, 0, Math.PI * 2);
+        ctx.fillStyle = COLOR[e.grade] || (e.d < 0 ? '#7cc4ff' : '#ff9f5a');
+        ctx.fill();
+      });
+      text('빠름', sx, sy + 38, 15, '#7cc4ff', 'left');
+      text('0', sx + sw / 2, sy + 38, 15, '#ccd', 'center');
+      text('늦음', sx + sw, sy + 38, 15, '#ff9f5a', 'right');
+      const T = a.timing;
+      text('정확 ' + T.perfect + ' · 좋음 ' + T.good + ' · 빠름 ' + T.early + ' · 늦음 ' + T.late, sx + sw / 2, sy + 76, 18, '#fff', 'center');
+      if (T.mean !== null) {
+        const m = Math.abs(T.mean) < 0.005 ? '평균 딱 맞음' : '평균 ' + Math.abs(T.mean).toFixed(2) + '초 ' + (T.mean < 0 ? '빠름' : '늦음');
+        text(m, sx + sw / 2, sy + 106, 18, '#ccd', 'center');
+      }
+      // 선구안
+      const D = a.discipline;
+      text('선구안', sx + sw / 2, sy + 156, 18, '#9ab', 'center', 'bold');
+      text('볼 ' + D.balls + '개 중 ' + D.chased + '개 스윙', sx + sw / 2, sy + 188, 20, D.balls && D.chased / D.balls >= C.ANALYSIS.chaseRate ? '#ff8a8a' : '#fff', 'center');
+      text('루킹 스트라이크 ' + D.looking + '개', sx + sw / 2, sy + 218, 18, '#ccd', 'center');
+    }
+
     function drawResult(view) {
       const r = view.result;
       const s = r.summary;
       drawBackdrop(view.now, 'rgba(8,14,26,0.84)');
+      if (view.resultTab === 'analysis' && s.analysis) {
+        text(r.playerName + ' · 경기 분석', 640, 50, 30, '#cde', 'center', 'bold');
+        drawAnalysis(s.analysis, 100);
+        const bw = 220;
+        button('tab:summary', 640 - bw - 12, 610, bw, 60, '결과 보기', { primary: true });
+        button('menu', 640 + 12, 610, bw, 60, '메뉴로');
+        return;
+      }
       const title = s.mode === 'challenge' ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + ' · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)') : C.LEVELS[s.levelIndex].name + ' 결과';
       text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
       const e = view.now - (r.shownAt || 0); // 결과 화면에 들어온 뒤 경과(초)
@@ -956,11 +1039,12 @@
       text(line1, 640, y + 20, 24, '#fff', 'center');
       text(line2, 640, y + 58, 22, '#ccd', 'center');
 
-      const bw = 200;
-      const by = 600;
       const canNext = s.mode === 'normal' && s.levelIndex + 1 < C.LEVELS.length && r.player.unlocked[s.levelIndex + 1];
+      const bw = canNext ? 180 : 200;
+      const by = 600;
       const buttons = [['retry', '다시하기', true]];
       if (canNext) buttons.push(['next', '다음 레벨', false]);
+      if (s.analysis) buttons.push(['tab:analysis', '분석 보기', false]);
       buttons.push(['share', '결과 공유', false]);
       buttons.push(['menu', '메뉴로', false]);
       const total = buttons.length * bw + (buttons.length - 1) * 24;
