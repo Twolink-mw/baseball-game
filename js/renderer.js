@@ -56,6 +56,7 @@
     let minTap = 0; // 버튼 최소 높이(논리 px)
     let pointer = null; // 마우스 위치(논리 좌표, 버튼 hover용). 터치면 null
     let pressed = null; // 방금 누른 버튼 { id, age(초) }
+    let release = L.release; // 지금 투수의 공 출발점 (팔 각도·체격에 따라, drawGame에서 정함)
 
     // 안전 영역(노치/홈바) 크기 (CSS 변수 --sa-*)
     function safeArea() {
@@ -157,9 +158,9 @@
       const su = screenProgress(u);
       let p;
       if (tt <= u) {
-        p = lerp(L.release, center, sp);
+        p = lerp(release, center, sp);
       } else {
-        const pu = lerp(L.release, center, su);
+        const pu = lerp(release, center, su);
         const s = su < 1 ? (sp - su) / (1 - su) : 1;
         const base = lerp(pu, target, s);
         const bend = C.PITCH_TYPES[pitch.type].bend;
@@ -289,11 +290,15 @@
     // ---- 게임 화면 ----
     function drawPitcher(g) {
       let el = 0;
-      // 와인드업: 멈춤 구간은 세트 자세, 이후 투구 동작 진행도(0~1)
-      if (g.phase === 'PITCH_WINDUP') el = Math.max(0, (g.phaseElapsed() - g.pitch.holdSec) / g.pitch.motionSec);
-      else if (g.phase === 'PITCH_FLIGHT') el = g.time - g.releaseTime;
+      let holdT = 0;
+      // 와인드업: 멈춤 구간은 세트 자세(사인 보며 끄덕임), 이후 투구 동작 진행도(0~1)
+      if (g.phase === 'PITCH_WINDUP') {
+        el = Math.max(0, (g.phaseElapsed() - g.pitch.holdSec) / g.pitch.motionSec);
+        holdT = g.phaseElapsed();
+      } else if (g.phase === 'PITCH_FLIGHT') el = g.time - g.releaseTime;
       else if (g.phase === 'RESULT_SHOW') el = g.phaseElapsed();
-      S.drawPitcher(ctx, S.pitcherPose(g.phase, el, el));
+      const look = g.level.look;
+      S.drawPitcher(ctx, S.pitcherPose(g.phase, el, el, look && look.arm, holdT), look);
     }
 
     // 결과에 따른 타자 반응 (그 타석이 끝난 결과만)
@@ -860,6 +865,7 @@
       ctx.save();
       ctx.translate(0, sh);
       drawBackdrop(now, null, g.level.mood);
+      release = S.releasePoint(g.level.look);
       drawBoard(g, now);
       drawPitcher(g);
       drawBatter(g, now);

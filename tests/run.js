@@ -1072,6 +1072,27 @@ test('3루타: 안타로 집계, 장타 미션에 포함, 2루타 몫에서 떼�
   assert.ok(CONFIG.JUDGE.exact.PERFECT.TRIPLE > 0 && CONFIG.JUDGE.exact.PERFECT.TRIPLE < CONFIG.JUDGE.exact.PERFECT.DOUBLE);
 });
 
+section('투수 외형');
+test('레벨·보스 투수마다 외형이 있고 형식이 맞음, 챌린지·보스는 투수 외형을 덮어씀', () => {
+  const { modeSetup, challengeSetup } = require('../js/game.js');
+  const ok = (lk) => lk && /^#[0-9a-f]{6}$/i.test(lk.jersey) && /^#[0-9a-f]{6}$/i.test(lk.pants) && /^#[0-9a-f]{6}$/i.test(lk.cap)
+    && lk.build >= 0.85 && lk.build <= 1.2 && ['over', 'three', 'side'].includes(lk.arm);
+  for (const lv of CONFIG.LEVELS) assert.ok(ok(lv.look), lv.name);
+  for (const id of CONFIG.MODES.boss.pitchers) {
+    const s = modeSetup('boss', { bossId: id }, CONFIG);
+    assert.ok(ok(s.level.look), id);
+    assert.deepEqual(s.level.look, CONFIG.CHALLENGE.pitchers.find((p) => p.id === id).look);
+  }
+  // 외형이 없는 '정통파'는 바탕 레벨(Lv.2) 외형
+  const classic = CONFIG.CHALLENGE.pitchers.find((p) => p.id === 'classic');
+  const { pitcherLevel } = require('../js/game.js');
+  assert.deepEqual(pitcherLevel(CONFIG.LEVELS[1], classic).look, CONFIG.LEVELS[1].look);
+  assert.ok(ok(challengeSetup('2026-11-13', CONFIG).level.look));
+  // 보스 외형은 서로 다름
+  const keys = CONFIG.MODES.boss.pitchers.map((id) => JSON.stringify(CONFIG.CHALLENGE.pitchers.find((p) => p.id === id).look));
+  assert.equal(new Set(keys).size, keys.length);
+});
+
 section('연습 코스 고정');
 {
   const { modeSetup } = require('../js/game.js');

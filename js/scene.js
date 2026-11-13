@@ -356,34 +356,70 @@
     release: [[2, -32], [0, -54], [0, -62], [-10, -58], [-6, -54], [12, -48], [6, -44], [-10, -16], [-14, -6], [10, -14], [14, 6]],
     follow: [[4, -28], [8, -46], [9, -54], [4, -36], [16, -22], [14, -40], [10, -42], [-6, -16], [-16, -14], [10, -14], [14, 6]],
   };
+  // 팔 각도별 던지는 팔(팔꿈치, 손) 자세. over는 POSES 그대로
+  const ARM_SLOTS = {
+    three: { cock: [[-20, -56], [-30, -64]], release: [[-14, -54], [-14, -50]], follow: [[2, -34], [14, -24]] },
+    side: { cock: [[-22, -48], [-34, -50]], release: [[-18, -46], [-24, -42]], follow: [[0, -32], [14, -26]] },
+  };
+
+  function poseOf(name, arm) {
+    const p = POSES[name];
+    const slot = ARM_SLOTS[arm] && ARM_SLOTS[arm][name];
+    if (!slot) return p;
+    const q = p.slice();
+    q[3] = slot[0];
+    q[4] = slot[1];
+    return q;
+  }
+
   // (시각, 자세) 목록에서 보간
   const WINDUP_KEYS = [[0, 'set'], [0.15, 'set'], [0.5, 'lift'], [0.8, 'cock'], [1, 'release']];
 
-  function blendPose(a, b, t) {
+  function blendPose(a, b, t, arm) {
     const e = t * t * (3 - 2 * t);
-    return POSES[a].map((p, i) => [p[0] + (POSES[b][i][0] - p[0]) * e, p[1] + (POSES[b][i][1] - p[1]) * e]);
+    const A = poseOf(a, arm);
+    const B = poseOf(b, arm);
+    return A.map((p, i) => [p[0] + (B[i][0] - p[0]) * e, p[1] + (B[i][1] - p[1]) * e]);
   }
 
-  function pitcherPose(phase, windupT, flightElapsed) {
+  // arm: 팔 각도, holdT: 세트 자세로 멈춰 있는 시간(초) — 사인을 보며 고개를 끄덕이고 글러브를 고쳐 쥠
+  function pitcherPose(phase, windupT, flightElapsed, arm, holdT) {
     if (phase === 'PITCH_WINDUP') {
+      if (windupT <= 0 && holdT > 0) {
+        const nod = Math.max(0, Math.sin(holdT * 5.5)) * 1.8;
+        const grip = Math.max(0, Math.sin(holdT * 2.7 + 1)) * 2.5;
+        return POSES.set.map((p, i) => (i === 2 ? [p[0], p[1] + nod] : i === 1 ? [p[0], p[1] + nod * 0.3] : i === 6 || i === 4 ? [p[0], p[1] - grip] : p));
+      }
       for (let i = 1; i < WINDUP_KEYS.length; i++) {
         const [t1, p1] = WINDUP_KEYS[i];
         const [t0, p0] = WINDUP_KEYS[i - 1];
-        if (windupT <= t1) return blendPose(p0, p1, t1 > t0 ? (windupT - t0) / (t1 - t0) : 1);
+        if (windupT <= t1) return blendPose(p0, p1, t1 > t0 ? (windupT - t0) / (t1 - t0) : 1, arm);
       }
-      return POSES.release;
+      return poseOf('release', arm);
     }
     if (phase === 'PITCH_FLIGHT') {
-      if (flightElapsed < 0.12) return blendPose('release', 'follow', flightElapsed / 0.12);
-      return POSES.follow;
+      if (flightElapsed < 0.12) return blendPose('release', 'follow', flightElapsed / 0.12, arm);
+      return poseOf('follow', arm);
     }
-    if (phase === 'RESULT_SHOW') return blendPose('follow', 'set', Math.min(1, flightElapsed / 0.6));
+    if (phase === 'RESULT_SHOW') return blendPose('follow', 'set', Math.min(1, flightElapsed / 0.6), arm);
     return POSES.set;
   }
 
-  function drawPitcher(c, pose) {
+  const DEFAULT_LOOK = { jersey: '#f2f3f6', pants: '#d6d8de', cap: '#1f3566', build: 1, arm: 'over' };
+
+  // 공이 손을 떠나는 화면 위치 (팔 각도·체격에 따라). 공 궤적의 출발점
+  function releasePoint(look) {
+    const lk = look || DEFAULT_LOOK;
     const P = L.pitcher;
-    const s = P.scale;
+    const s = P.scale * (lk.build || 1);
+    const h = poseOf('release', lk.arm)[4];
+    return { x: P.x + h[0] * s, y: P.y + h[1] * s };
+  }
+
+  function drawPitcher(c, pose, look) {
+    const lk = look || DEFAULT_LOOK;
+    const P = L.pitcher;
+    const s = P.scale * (lk.build || 1);
     const pt = (i) => ({ x: P.x + pose[i][0] * s, y: P.y + pose[i][1] * s });
     const [hip, neck, head, tE, tH, gE, gH, pK, pF, sK, sF] = pose.map((_, i) => pt(i));
     c.save();
@@ -403,21 +439,28 @@
       c.stroke();
     };
     // 다리(바지) + 신발
-    limb([hip, pK, pF], 7, '#d6d8de');
-    limb([hip, sK, sF], 7, '#e4e6ec');
+    limb([hip, pK, pF], 7, lk.pants);
+    limb([hip, sK, sF], 7, lk.pants);
     c.fillStyle = '#1a1f2b';
     for (const f of [pF, sF]) c.fillRect(f.x - 4 * s, f.y - 2 * s, 8 * s, 4 * s);
-    // 몸통
-    limb([hip, neck], 15, '#f2f3f6');
-    c.strokeStyle = '#2b4a8b'; // 허리 띠
+    // 몸통 (체격이 클수록 굵게)
+    limb([hip, neck], 15 * (lk.build || 1), lk.jersey);
+    c.strokeStyle = lk.cap; // 허리 띠는 모자 색
     c.lineWidth = 3 * s;
     c.beginPath();
     c.moveTo(hip.x - 7 * s, hip.y - 2 * s);
     c.lineTo(hip.x + 7 * s, hip.y - 2 * s);
     c.stroke();
     // 팔
-    limb([neck, gE, gH], 5, '#eceef2');
-    limb([neck, tE, tH], 5, '#eceef2');
+    limb([neck, gE, gH], 5, lk.jersey);
+    limb([neck, tE, tH], 5, lk.jersey);
+    // 소매 끝(모자 색)으로 팔 윤곽을 살림
+    c.fillStyle = lk.cap;
+    for (const e of [gE, tE]) {
+      c.beginPath();
+      c.arc(e.x, e.y, 1.8 * s, 0, Math.PI * 2);
+      c.fill();
+    }
     c.fillStyle = '#7a4a24'; // 글러브
     c.beginPath();
     c.arc(gH.x, gH.y, 4.5 * s, 0, Math.PI * 2);
@@ -431,7 +474,7 @@
     c.beginPath();
     c.arc(head.x, head.y, 6.5 * s, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = '#1f3566';
+    c.fillStyle = lk.cap;
     c.beginPath();
     c.arc(head.x, head.y - 1 * s, 6.8 * s, Math.PI, 0);
     c.fill();
@@ -636,6 +679,6 @@
   }
 
   Object.assign(BB, {
-    scene: { project, setExtent, buildBackground, drawSky, drawMood, drawScoreboard, pitcherPose, drawPitcher, drawBatter, fenceY, SCOREBOARD },
+    scene: { project, setExtent, buildBackground, drawSky, drawMood, drawScoreboard, pitcherPose, drawPitcher, releasePoint, drawBatter, fenceY, SCOREBOARD },
   });
 })(window);

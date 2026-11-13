@@ -61,6 +61,9 @@
     LEVELS: [
       {
         id: 1, name: 'Lv.1', title: '기교파', baseSpeed: 145, revealSec: 0.6, mood: 'day', // 구장 분위기 (THEME.moods)
+        // 투수 외형: 유니폼·바지·모자(허리띠) 색, 체격 배율, 팔 각도(over 오버핸드 / three 스리쿼터 / side 사이드암)
+        // 팔 각도에 따라 공이 손을 떠나는 화면 위치가 달라짐 (판정과 무관). 유니폼은 밤 경기에서도 보이게 밝은 색만
+        look: { jersey: '#f4f5f8', pants: '#d9dce3', cap: '#1f6b46', build: 0.95, arm: 'three' },
         // 투구 템포(초): 세트 자세 멈춤 + 투구 동작. 둘 다 범위 안에서 투구마다 랜덤
         tempo: { hold: [0.1, 0.4], motion: [0.9, 0.9] }, // 거의 일정한 리듬
         pitchMix: { '직구': 55, '투심': 25, '체인지업': 20 },
@@ -69,7 +72,8 @@
         adjacent: { FOUL: 40, OUT_BIP: 45, SWING_MISS: 15 },
       },
       {
-        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.40, mood: 'dusk', // M3 튜닝 0.42 → 0.38, 플레이 피드백(Lv.3보다 어렵게 느껴짐) 0.38 → 0.40
+        id: 2, name: 'Lv.2', title: '정통파', baseSpeed: 152, revealSec: 0.40, mood: 'dusk',
+        look: { jersey: '#eef2f8', pants: '#d6d8de', cap: '#1f3566', build: 1, arm: 'over' }, // M3 튜닝 0.42 → 0.38, 플레이 피드백(Lv.3보다 어렵게 느껴짐) 0.38 → 0.40
         tempo: { hold: [0, 0.8], motion: [0.7, 0.9] }, // 가끔 길게 멈춤
         pitchMix: { '직구': 45, '투심': 15, '슬라이더': 25, '체인지업': 15 },
         ai: 'weak',
@@ -80,7 +84,8 @@
         adjacent: { FOUL: 30, OUT_BIP: 40, SWING_MISS: 30 },
       },
       {
-        id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, mood: 'night', // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
+        id: 3, name: 'Lv.3', title: '파이어볼러', baseSpeed: 160, revealSec: 0.36, mood: 'night',
+        look: { jersey: '#dfe2e9', pants: '#c6cad3', cap: '#b3262e', build: 1.1, arm: 'over' }, // 플레이 피드백: 0.32 → 0.36 (너무 어려움)
         tempo: { hold: [0, 1.2], motion: [0.55, 0.9] }, // 퀵 모션과 긴 멈춤이 섞임
         pitchMix: { '직구': 40, '투심': 10, '슬라이더': 25, '커브': 15, '체인지업': 10 },
         ai: 'adaptive',
@@ -115,14 +120,19 @@
       level: 2, // 바탕 레벨(1부터). 결과는 이 레벨 번호로 저장되지만 최고 타율·해제에는 반영 안 됨
       logDays: 7, // 타이틀 챌린지 카드에 보여 주는 최근 날짜 수 (타자별 dailyLog 보관 개수)
       // 오늘의 투수: 바탕 레벨 값을 덮어쓴다. ai는 random/weak만 (사용자 클릭에 반응하면 기기마다 투구 순서가 달라짐)
-      // id: 도전 모드 '보스 투수' 기록 키
+      // id: 도전 모드 '보스 투수' 기록 키. look: 투수 외형(LEVELS[].look과 같은 형식, 없으면 바탕 레벨 것)
       pitchers: [
         { id: 'classic', name: '정통파', desc: '오늘은 평범한 정통파' },
-        { id: 'power', name: '강속구', desc: '직구 위주의 빠른 공', baseSpeed: 158, ballRate: 0.25, pitchMix: { '직구': 60, '투심': 20, '슬라이더': 20 } },
-        { id: 'curve', name: '커브볼러', desc: '느린 커브로 타이밍을 뺏음', baseSpeed: 148, pitchMix: { '직구': 35, '커브': 40, '체인지업': 25 } },
-        { id: 'wild', name: '제구 난조', desc: '볼이 많은 투수, 골라내야 산다', ballRate: 0.45 },
-        { id: 'quick', name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] } },
-        { id: 'breaking', name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 } },
+        { id: 'power', name: '강속구', desc: '직구 위주의 빠른 공', baseSpeed: 158, ballRate: 0.25, pitchMix: { '직구': 60, '투심': 20, '슬라이더': 20 },
+          look: { jersey: '#f6f6f6', pants: '#dcdcdc', cap: '#c4161c', build: 1.16, arm: 'over' } },
+        { id: 'curve', name: '커브볼러', desc: '느린 커브로 타이밍을 뺏음', baseSpeed: 148, pitchMix: { '직구': 35, '커브': 40, '체인지업': 25 },
+          look: { jersey: '#e4e8f4', pants: '#cfd4e2', cap: '#4a2f8a', build: 0.94, arm: 'over' } },
+        { id: 'wild', name: '제구 난조', desc: '볼이 많은 투수, 골라내야 산다', ballRate: 0.45,
+          look: { jersey: '#f3ead8', pants: '#ddd2bd', cap: '#d97a1e', build: 1.06, arm: 'three' } },
+        { id: 'quick', name: '퀵모션', desc: '멈췄다 던졌다, 리듬이 들쭉날쭉', tempo: { hold: [0, 1.4], motion: [0.5, 0.9] },
+          look: { jersey: '#e2f1e8', pants: '#c9dccf', cap: '#0f6f5c', build: 0.9, arm: 'side' } },
+        { id: 'breaking', name: '변화구 장인', desc: '직구보다 변화구가 많음', baseSpeed: 150, pitchMix: { '직구': 25, '슬라이더': 30, '커브': 20, '체인지업': 25 },
+          look: { jersey: '#e3dcf2', pants: '#c9c0de', cap: '#3b2a6b', build: 1, arm: 'side' } },
       ],
       // 오늘의 미션. stat: homers, hits, strikeouts, extraBases(2루타+3루타+홈런), perfects, hitStreak(연속 타석 안타), firstHit(첫 타석 안타 1/0)
       // min: 이 값 이상이면 달성, max: 게임이 끝났을 때 이 값 이하이면 달성
