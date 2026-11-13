@@ -14,7 +14,7 @@
     HOMERUN: '홈런!',
     TRIPLE: '3루타!',
     DOUBLE: '2루타!',
-    SINGLE: '안타!',
+    SINGLE: '1루타!',
     FOUL: '파울',
     OUT_BIP: '범타 아웃',
     SWING_MISS: '헛스윙',
@@ -27,7 +27,7 @@
     HOMERUN: ['홈런', '#ff5a5a', '#fff'],
     TRIPLE: ['3루타', '#b46cff', '#fff'],
     DOUBLE: ['2루타', '#ff9f43', '#111'],
-    SINGLE: ['안타', '#ffd34d', '#111'],
+    SINGLE: ['1루타', '#ffd34d', '#111'],
     OUT_BIP: ['범타', '#8b97a8', '#111'],
     STRIKEOUT: ['삼진', '#262d3a', '#ff8a8a'],
   };
@@ -606,7 +606,7 @@
     }
 
     // ---- 투구 기록 패널 (화면 오른쪽) ----
-    const LOG_LABEL = { HOMERUN: '홈런', TRIPLE: '3루타', DOUBLE: '2루타', SINGLE: '안타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹', BALL: '볼' };
+    const LOG_LABEL = { HOMERUN: '홈런', TRIPLE: '3루타', DOUBLE: '2루타', SINGLE: '1루타', FOUL: '파울', OUT_BIP: '범타', SWING_MISS: '헛스윙', LOOKING: '루킹', BALL: '볼' };
     const LOG_COLOR = { HOMERUN: '#ffd34d', TRIPLE: '#ffd34d', DOUBLE: '#ffd34d', SINGLE: '#ffd34d', FOUL: '#dfe6ee', OUT_BIP: '#9aa7b8', SWING_MISS: '#ff8a8a', LOOKING: '#ff8a8a', BALL: '#4fd27a' };
 
     // 타석 결과 한마디 (직전 타석 제목용)
@@ -786,13 +786,13 @@
       let main = RESULT_TEXT[last.result];
       if (last.atBatOutcome === 'STRIKEOUT') main = last.result === 'LOOKING' ? '루킹 삼진!' : '삼진 아웃!';
       if (last.foulCapped) main = '파울 → 범타 처리';
-      const hit = !!HITS[last.result];
-      const color = last.result === 'HOMERUN' ? '#ffd34d' : hit ? '#ffe9a0' : last.atBatOutcome === 'STRIKEOUT' ? '#ff8a8a' : '#fff';
+      const ht = !last.foulCapped && FX.hitText[last.result]; // 안타 종류별 크기·색
+      const color = ht ? ht.color : last.atBatOutcome === 'STRIKEOUT' ? '#ff8a8a' : '#fff';
       ctx.save();
       ctx.translate(640, 140);
       const sc = Math.max(0.01, popScale(e));
       ctx.scale(sc, sc);
-      outlined(main, 0, 0, last.result === 'HOMERUN' ? 72 : 56, color);
+      outlined(main, 0, 0, ht ? ht.size : 56, color);
       ctx.restore();
       const badge = timingBadge(last);
       if (badge) {
@@ -1241,69 +1241,56 @@
       const title = s.mode === 'challenge'
         ? '오늘의 챌린지 ' + r.date.slice(5).replace('-', '/') + ' · 투수 ' + s.pitcherName + (r.official ? '' : ' (연습)')
         : s.modeName ? s.modeName + ' 결과' : C.LEVELS[s.levelIndex].name + ' 결과';
-      text(r.playerName + ' · ' + title, 640, 60, 30, '#cde', 'center', 'bold');
+      text(r.playerName + ' · ' + title, 640, 56, 30, '#cde', 'center', 'bold');
       const e = view.now - (r.shownAt || 0); // 결과 화면에 들어온 뒤 경과(초)
       // 하나씩 세며 올라감
       const k = clamp01(e / 0.7);
       const ease = 1 - (1 - k) * (1 - k);
       if (scoreMode) {
-        text(s.mode === 'derby' ? '홈런' : '안타', 640, 118, 24, '#aaa', 'center');
-        text(Math.round(ease * s.score) + '개', 640, 196, 104, '#ffd34d', 'center', 'bold');
+        text(s.mode === 'derby' ? '홈런' : '안타', 640, 104, 22, '#aaa', 'center');
+        text(Math.round(ease * s.score) + '개', 640, 170, 96, '#ffd34d', 'center', 'bold');
       } else {
-        text('이번 타율', 640, 118, 24, '#aaa', 'center');
-        text(BB.formatAvg(Math.round(ease * s.hits) / C.AT_BATS_PER_GAME), 640, 196, 104, '#ffd34d', 'center', 'bold');
+        text('이번 타율', 640, 104, 22, '#aaa', 'center');
+        text(BB.formatAvg(Math.round(ease * s.hits) / C.AT_BATS_PER_GAME), 640, 170, 96, '#ffd34d', 'center', 'bold');
       }
-      let y = 280;
+      // 정보 한 줄: 통산 / 이전 최고 / 챌린지 미션 결과
       const avgOr = (x) => (x === null || x === undefined ? '-' : BB.formatAvg(x));
-      if (s.mode === 'normal') {
-        text('통산 타율 ' + avgOr(r.careerBefore) + ' → ' + avgOr(r.careerAfter) + '  (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)', 640, y, 24, '#fff', 'center', 'bold');
-      } else if (scoreMode) {
-        text(s.atBats + '타석 · 아웃 ' + s.modeOuts + ' · 이전 최고 ' + (r.prevBest == null ? '-' : r.prevBest + '개'), 640, y, 24, '#fff', 'center', 'bold');
-      } else if (s.mode === 'boss') {
-        text('이 투수 상대 이전 최고 ' + avgOr(r.prevBest), 640, y, 24, '#fff', 'center', 'bold');
-      } else {
-        // 타석별 결과 격자 + 미션
-        drawOutcomeGrid(s.atBatLog, 640, y - 22, 48);
-        y += 64;
-      }
-      y += 50;
-      // 기록 갱신·레벨 해제: 타율이 다 올라간 뒤 차례로 튀어나오고 깜빡임
-      const badge = (str, color, t0) => {
-        if (e < t0) return;
-        const sc = Math.max(0.01, popScale(e - t0));
-        ctx.save();
-        ctx.translate(640, y);
-        ctx.scale(sc, sc);
-        ctx.globalAlpha = 0.8 + 0.2 * Math.sin((e - t0) * 6);
-        outlined(str, 0, 0, 36, color);
-        ctx.restore();
-      };
-      if (r.newRecord) {
-        badge('NEW RECORD', '#ff6b6b', 0.8);
-        y += 46;
-      }
-      if (r.unlockedLevel !== null) {
-        badge(C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a', r.newRecord ? 1.1 : 0.8);
-        y += 46;
-      }
-      if (r.newTitles && r.newTitles.length) {
-        badge('칭호 획득! ' + titleNames(r.newTitles), '#ffe9a0', 1.4);
-        y += 46;
-      }
+      let info = null;
+      if (s.mode === 'normal') info = '통산 타율 ' + avgOr(r.careerBefore) + ' → ' + avgOr(r.careerAfter) + '  (' + r.player.hits + '안타 / ' + r.player.atBats + '타수)';
+      else if (scoreMode) info = s.atBats + '타석 · 아웃 ' + s.modeOuts + ' · 이전 최고 ' + (r.prevBest == null ? '-' : r.prevBest + '개');
+      else if (s.mode === 'boss') info = '이 투수 상대 이전 최고 ' + avgOr(r.prevBest);
+      else if (s.mission) info = '미션 ' + s.mission.text;
+      if (info) text(info, 640, 246, 22, '#fff', 'center', 'bold');
+
+      // 타석별 결과 칸 (모든 모드. 타석 수가 많으면 최근 AT_BATS_PER_GAME개)
+      const N = C.AT_BATS_PER_GAME;
+      const log = s.atBatLog.slice(-N);
+      drawOutcomeGrid(log, 640, 274, 42, scoreMode ? log.length : N, s.atBatLog.length - log.length + 1);
+
+      // 배지: 한 줄에 가로로, 타율이 다 올라간 뒤 차례로 튀어나옴
+      const badges = []; // [문구, 색, 등장 시각(null이면 바로·정지)]
+      if (r.newRecord) badges.push(['NEW RECORD', '#ff6b6b', 0.8]);
+      if (r.unlockedLevel !== null) badges.push([C.LEVELS[r.unlockedLevel].name + ' 해제!', '#7cf29a', 1.0]);
+      if (r.newTitles && r.newTitles.length) badges.push(['칭호 획득! ' + titleNames(r.newTitles), '#ffe9a0', 1.2]);
       if (s.mission) {
-        if (s.missionDone) badge('미션 달성! ' + s.mission.text + (r.official ? '' : ' (연습)'), '#7cf29a', 0.8);
-        else text('미션 실패 · ' + s.mission.text, 640, y, 26, '#ff8a8a', 'center', 'bold');
-        y += 46;
+        if (s.missionDone) badges.push(['미션 달성!' + (r.official ? '' : ' (연습)'), '#7cf29a', 0.8]);
+        else badges.push(['미션 실패', '#ff8a8a', null]);
         const streak = BB.currentStreak(r.player, r.date);
-        if (r.official && streak > 0) {
-          text('챌린지 연속 ' + streak + '일째' + (r.player.streakBest > streak ? ' (최고 ' + r.player.streakBest + '일)' : streak > 1 ? ' · 최고 기록!' : ''), 640, y - 6, 22, '#ffb24d', 'center', 'bold');
-          y += 34;
-        }
+        if (r.official && streak > 0) badges.push(['연속 ' + streak + '일째' + (r.player.streakBest > streak ? '' : streak > 1 ? ' 최고!' : ''), '#ffb24d', null]);
       }
-      const line1 = '안타 ' + s.hits + ' (단타 ' + s.singles + ' · 2루타 ' + s.doubles + (s.triples ? ' · 3루타 ' + s.triples : '') + ' · 홈런 ' + s.homers + ')';
-      const line2 = '삼진 ' + s.strikeouts + ' · 범타 ' + s.outs + ' · 총 투구수 ' + s.totalPitches + ' · 정확 타이밍 ' + s.perfects;
-      text(line1, 640, y + 20, 24, '#fff', 'center');
-      text(line2, 640, y + 58, 22, '#ccd', 'center');
+      drawBadgeRow(badges, 640, 372, e);
+
+      // 숫자 카드 4개
+      const cards = [
+        ['안타', s.hits, '1루타 ' + s.singles + ' · 2루타 ' + s.doubles + ' · 3루타 ' + (s.triples || 0)],
+        ['홈런', s.homers, s.homers ? '담장 밖으로 ' + s.homers + '번' : '-'],
+        ['삼진', s.strikeouts, '범타 ' + s.outs],
+        ['정확 타이밍', s.perfects, '총 ' + s.totalPitches + '구'],
+      ];
+      const cw = 230;
+      const cg = 18;
+      const cx0 = 640 - (cw * cards.length + cg * (cards.length - 1)) / 2;
+      cards.forEach(([label, value, sub], i) => statCard(cx0 + i * (cw + cg), 418, cw, 128, label, value, sub));
 
       const canNext = s.mode === 'normal' && s.levelIndex + 1 < C.LEVELS.length && r.player.unlocked[s.levelIndex + 1];
       const bw = canNext ? 180 : 200;
@@ -1323,10 +1310,53 @@
       return names.length > 2 ? names[0] + ' 외 ' + (names.length - 1) + '개' : names.join(' · ');
     }
 
-    // 타석별 결과를 색 칸으로 한 줄에 (가운데 cx, 위쪽 y)
-    function drawOutcomeGrid(log, cx, y, size) {
+    // 숫자 카드: 제목(위), 큰 숫자(가운데), 설명(아래)
+    function statCard(x, y, w, h, label, value, sub) {
+      roundRect(x, y, w, h, 14);
+      ctx.fillStyle = 'rgba(255,255,255,0.07)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      text(label, x + w / 2, y + 24, 17, '#9ab', 'center', 'bold');
+      text(String(value), x + w / 2, y + 66, 44, value ? '#fff' : '#778', 'center', 'bold');
+      text(sub, x + w / 2, y + 106, 14, '#bcd', 'center');
+    }
+
+    // 배지 한 줄 (가운데 cx, 세로 가운데 cy). 넘치면 글자를 줄임. e: 화면에 들어온 뒤 경과(초)
+    function drawBadgeRow(badges, cx, cy, e) {
+      if (!badges.length) return;
+      let size = 28;
+      const gap = 28;
+      const widthAt = (sz) => {
+        ctx.font = 'bold ' + sz + 'px ' + FONT;
+        return badges.reduce((a, b) => a + ctx.measureText(b[0]).width, 0) + gap * (badges.length - 1);
+      };
+      while (size > 18 && widthAt(size) > 1180) size -= 2;
+      let x = cx - widthAt(size) / 2;
+      for (const [str, color, t0] of badges) {
+        ctx.font = 'bold ' + size + 'px ' + FONT;
+        const w = ctx.measureText(str).width;
+        if (t0 === null || e >= t0) {
+          ctx.save();
+          ctx.translate(x + w / 2, cy);
+          if (t0 !== null) {
+            const sc = Math.max(0.01, popScale(e - t0));
+            ctx.scale(sc, sc);
+            ctx.globalAlpha = 0.8 + 0.2 * Math.sin((e - t0) * 6);
+          }
+          outlined(str, 0, 0, size, color);
+          ctx.restore();
+        }
+        x += w + gap;
+      }
+    }
+
+    // 타석별 결과를 색 칸으로 한 줄에 (가운데 cx, 위쪽 y). n: 칸 수, startNo: 첫 칸 번호
+    function drawOutcomeGrid(log, cx, y, size, n, startNo) {
       const gap = 8;
-      const n = C.AT_BATS_PER_GAME;
+      n = n || C.AT_BATS_PER_GAME;
+      startNo = startNo || 1;
       const x0 = cx - (n * size + (n - 1) * gap) / 2;
       for (let i = 0; i < n; i++) {
         const x = x0 + i * (size + gap);
@@ -1338,7 +1368,7 @@
         ctx.lineWidth = 1.5;
         ctx.stroke();
         if (g) text(g[0], x + size / 2, y + size / 2 + 1, Math.round(size * 0.29), g[2], 'center', 'bold');
-        text(String(i + 1), x + size / 2, y + size + 14, 13, '#9ab', 'center');
+        text(String(startNo + i), x + size / 2, y + size + 14, 13, '#9ab', 'center');
       }
     }
 

@@ -224,6 +224,13 @@
       passDropCells: 0.5, // 그동안 아래로 떨어지는 거리(존 한 칸 높이 기준)
       passGrow: 1.25, // 그동안 커지는 배수 (예전엔 3~4배)
       cloudSpeed: 6, // 구름 이동 (논리 px/초)
+      // 타격 결과 문구: 1루타 → 홈런으로 갈수록 크고 화려하게 (피드백: 단타를 친 줄 몰랐음)
+      hitText: {
+        SINGLE: { size: 54, color: '#ffe9a0' },
+        DOUBLE: { size: 62, color: '#ffbe6b' },
+        TRIPLE: { size: 68, color: '#d4a6ff' },
+        HOMERUN: { size: 78, color: '#ffd34d' },
+      },
     },
 
     STORAGE_KEY: 'bbgame.v1',
